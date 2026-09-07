@@ -31,15 +31,19 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -75,6 +79,7 @@ class TicketControllerTest
     private EmailService emailService;
 
     private static final String BASE_PATH = ApiPaths.BASE + ApiPaths.Tickets.ROOT + ApiPaths.Tickets.INVITATION;
+    private static final String DELETE_BASE_PATH = ApiPaths.BASE + ApiPaths.Tickets.ROOT;
     private static final String TEST_EMAIL = "tickettest@example.com";
     private static final String TEST_PASSWORD = "securePassword123";
 
@@ -153,16 +158,27 @@ class TicketControllerTest
     }
 
     /**
-     * Creates and persists an Attendee for use in tests.
+     * Creates and persists an Attendee with the default test email.
      *
      * @return the persisted Attendee entity
      */
     private Attendee createAttendee()
     {
+        return createAttendee("jon@example.com");
+    }
+
+    /**
+     * Creates and persists an Attendee with the given email address.
+     *
+     * @param email the attendee's email address
+     * @return the persisted Attendee entity
+     */
+    private Attendee createAttendee(String email)
+    {
         Attendee attendee = new Attendee.Builder()
             .firstName("Jon")
             .lastName("Smith")
-            .email("jon@example.com")
+            .email(email)
             .build();
 
         return attendeeRepository.save(attendee);
@@ -213,6 +229,58 @@ class TicketControllerTest
                 "message": "%s"
             }
             """.formatted(publicToken, invitationResponse, message);
+    }
+
+    /**
+     * Performs a login request and returns the JWT from the response.
+     *
+     * @param email the email address
+     * @param password the password
+     * @return the JWT string from the login response
+     * @throws Exception if the request fails
+     */
+    private String loginAndGetJwt(String email, String password) throws Exception
+    {
+        String loginPath = ApiPaths.BASE + ApiPaths.Sessions.ROOT + ApiPaths.Sessions.LOGIN;
+        String requestBody = """
+            {
+                "email": "%s",
+                "password": "%s"
+            }
+            """.formatted(email, password);
+
+        MvcResult result = mockMvc.perform(post(loginPath)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.jwt").isNotEmpty())
+            .andReturn();
+
+        String responseBody = result.getResponse().getContentAsString();
+        int jwtStart = responseBody.indexOf("\"jwt\":\"") + 7;
+        int jwtEnd = responseBody.indexOf("\"", jwtStart);
+        return responseBody.substring(jwtStart, jwtEnd);
+    }
+
+    /**
+     * Builds a JSON request body for deleting tickets.
+     *
+     * @param publicId the event's public ID
+     * @param emails the list of attendee emails whose tickets should be deleted
+     * @return a JSON string representing the delete tickets request
+     */
+    private String buildDeleteTicketsRequestBody(String publicId, List<String> emails)
+    {
+        String emailsJson = emails
+            .stream()
+            .map(email -> "\"" + email + "\"")
+            .collect(java.util.stream.Collectors.joining(", "));
+        return """
+            {
+                "publicId": "%s",
+                "emails": [%s]
+            }
+            """.formatted(publicId, emailsJson);
     }
 
     @Nested
@@ -465,6 +533,112 @@ class TicketControllerTest
                     .content(requestBody))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409));
+        }
+    }
+
+    @Nested
+    @DisplayName("DELETE /api/v1/tickets")
+    class DeleteTicketsTests
+    {
+        @Test
+        @DisplayName("Successful deletion of a single ticket returns 200")
+        void successfulSingleTicketDeletionReturns200() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PRIVATE);
+            Attendee attendee = createAttendee("jon@example.com");
+            Ticket ticket = createTicket(event, attendee);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            String requestBody = buildDeleteTicketsRequestBody
+            (
+                event.getPublicId(),
+                List.of("jon@example.com")
+            );
+
+            mockMvc.perform(delete(DELETE_BASE_PATH)
+                    .header("Authorization", "Bearer " + jwt)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Deleted 1 ticket."));
+
+            // Verify that the ticket was removed from the database.
+            assertThat(ticketRepository.findAllActiveTicketsByEventId(event.getId())).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Successful deletion of multiple tickets returns 200")
+        void successfulMultipleTicketDeletionReturns200() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PRIVATE);
+            Attendee attendee1 = createAttendee("jon@example.com");
+            Attendee attendee2 = createAttendee("jane@example.com");
+            Ticket ticket1 = createTicket(event, attendee1);
+            Ticket ticket2 = createTicket(event, attendee2);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            String requestBody = buildDeleteTicketsRequestBody
+            (
+                event.getPublicId(),
+                List.of("jon@example.com", "jane@example.com")
+            );
+
+            mockMvc.perform(delete(DELETE_BASE_PATH)
+                    .header("Authorization", "Bearer " + jwt)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Deleted 2 tickets."));
+
+            // Verify that both tickets were removed from the database.
+            assertThat(ticketRepository.findAllActiveTicketsByEventId(event.getId())).isEmpty();
+        }
+
+        @Test
+        @DisplayName("Ticket deletion without JWT returns 401")
+        void deletionWithoutJwtReturns401() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PRIVATE);
+            Attendee attendee = createAttendee("jon@example.com");
+            Ticket ticket = createTicket(event, attendee);
+
+            String requestBody = buildDeleteTicketsRequestBody
+            (
+                event.getPublicId(),
+                List.of("jon@example.com")
+            );
+
+            mockMvc.perform(delete(DELETE_BASE_PATH)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+        }
+
+        @Test
+        @DisplayName("Ticket deletion with invalid JWT returns 401")
+        void deletionWithInvalidJwtReturns401() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PRIVATE);
+            Attendee attendee = createAttendee("jon@example.com");
+            Ticket ticket = createTicket(event, attendee);
+
+            String requestBody = buildDeleteTicketsRequestBody
+            (
+                event.getPublicId(),
+                List.of("jon@example.com")
+            );
+
+            mockMvc.perform(delete(DELETE_BASE_PATH)
+                    .header("Authorization", "Bearer invalid.jwt.token")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
         }
     }
 }
