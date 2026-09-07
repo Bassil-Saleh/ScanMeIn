@@ -547,7 +547,7 @@ class TicketControllerTest
             EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
             Event event = createEvent(host, EventType.PRIVATE);
             Attendee attendee = createAttendee("jon@example.com");
-            Ticket ticket = createTicket(event, attendee);
+            createTicket(event, attendee);
             String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
 
             String requestBody = buildDeleteTicketsRequestBody
@@ -575,8 +575,8 @@ class TicketControllerTest
             Event event = createEvent(host, EventType.PRIVATE);
             Attendee attendee1 = createAttendee("jon@example.com");
             Attendee attendee2 = createAttendee("jane@example.com");
-            Ticket ticket1 = createTicket(event, attendee1);
-            Ticket ticket2 = createTicket(event, attendee2);
+            createTicket(event, attendee1);
+            createTicket(event, attendee2);
             String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
 
             String requestBody = buildDeleteTicketsRequestBody
@@ -603,7 +603,7 @@ class TicketControllerTest
             EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
             Event event = createEvent(host, EventType.PRIVATE);
             Attendee attendee = createAttendee("jon@example.com");
-            Ticket ticket = createTicket(event, attendee);
+            createTicket(event, attendee);
 
             String requestBody = buildDeleteTicketsRequestBody
             (
@@ -625,7 +625,7 @@ class TicketControllerTest
             EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
             Event event = createEvent(host, EventType.PRIVATE);
             Attendee attendee = createAttendee("jon@example.com");
-            Ticket ticket = createTicket(event, attendee);
+            createTicket(event, attendee);
 
             String requestBody = buildDeleteTicketsRequestBody
             (
@@ -648,7 +648,7 @@ class TicketControllerTest
             EventHost host1 = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
             Event event = createEvent(host1, EventType.PRIVATE);
             Attendee attendee = createAttendee("jon@example.com");
-            Ticket ticket = createTicket(event, attendee);
+            createTicket(event, attendee);
 
             createVerifiedEventHost("other@example.com", TEST_PASSWORD);
             String otherJwt = loginAndGetJwt("other@example.com", TEST_PASSWORD);
