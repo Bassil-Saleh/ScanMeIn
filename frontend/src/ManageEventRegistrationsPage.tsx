@@ -38,6 +38,16 @@ export function ManageEventRegistrationsPage() {
     //       - A "Delete" button to confirm and trigger the deletion of
     //         the selected registrations.
 
+    // TODO: When the user confirms the deletion of selected registrations,
+    //       send a request to the API route DELETE /api/v1/tickets.
+
+    // TODO: Show an appropriate message to the user based on
+    //       the result of a request sent to the API route
+    //       DELETE /api/v1/tickets.
+
+    // TODO: After a request to DELETE /api/v1/tickets succeeds,
+    //       update the table view of the event's registrations.
+
     // TODO: If the user is logged in and an event public ID
     //       was provided, send a request to the API route
     //       GET /api/v1/tickets/{publicId} to retrieve a
@@ -51,7 +61,7 @@ export function ManageEventRegistrationsPage() {
 
     // TODO: If the request to the API route GET /api/v1/tickets/{publicId}
     //       succeeds, use the request payload to populate the table view
-    //       of the event's registrations. 
+    //       of the event's registrations.
 
     return (
         <div></div>
