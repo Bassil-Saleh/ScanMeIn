@@ -640,5 +640,181 @@ class TicketControllerTest
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.status").value(401));
         }
+
+        @Test
+        @DisplayName("Deleting another host's tickets returns 401")
+        void deletingAnotherHostsTicketsReturns401() throws Exception
+        {
+            EventHost host1 = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host1, EventType.PRIVATE);
+            Attendee attendee = createAttendee("jon@example.com");
+            Ticket ticket = createTicket(event, attendee);
+
+            createVerifiedEventHost("other@example.com", TEST_PASSWORD);
+            String otherJwt = loginAndGetJwt("other@example.com", TEST_PASSWORD);
+
+            String requestBody = buildDeleteTicketsRequestBody
+            (
+                event.getPublicId(),
+                List.of("jon@example.com")
+            );
+
+            mockMvc.perform(delete(DELETE_BASE_PATH)
+                    .header("Authorization", "Bearer " + otherJwt)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+        }
+
+        @Test
+        @DisplayName("Deleting tickets for a non-existent event returns 404")
+        void nonExistentEventReturns404() throws Exception
+        {
+            createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            String requestBody = buildDeleteTicketsRequestBody
+            (
+                UUID.randomUUID().toString(),
+                List.of("jon@example.com")
+            );
+
+            mockMvc.perform(delete(DELETE_BASE_PATH)
+                    .header("Authorization", "Bearer " + jwt)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+        }
+
+        @Test
+        @DisplayName("Deleting tickets with emails that match no active tickets returns 404")
+        void noMatchingTicketsReturns404() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PRIVATE);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            String requestBody = buildDeleteTicketsRequestBody
+            (
+                event.getPublicId(),
+                List.of("nonexistent@example.com")
+            );
+
+            mockMvc.perform(delete(DELETE_BASE_PATH)
+                    .header("Authorization", "Bearer " + jwt)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+        }
+
+        @Test
+        @DisplayName("Request with blank publicId returns 400")
+        void blankPublicIdReturns400() throws Exception
+        {
+            createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            String requestBody = buildDeleteTicketsRequestBody
+            (
+                "",
+                List.of("jon@example.com")
+            );
+
+            mockMvc.perform(delete(DELETE_BASE_PATH)
+                    .header("Authorization", "Bearer " + jwt)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        }
+
+        @Test
+        @DisplayName("Request with missing publicId returns 400")
+        void missingPublicIdReturns400() throws Exception
+        {
+            createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            String requestBody = """
+                {
+                    "emails": ["jon@example.com"]
+                }
+                """;
+
+            mockMvc.perform(delete(DELETE_BASE_PATH)
+                    .header("Authorization", "Bearer " + jwt)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        }
+
+        @Test
+        @DisplayName("Request with an empty emails list returns 400")
+        void emptyEmailsReturns400() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PRIVATE);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            String requestBody = buildDeleteTicketsRequestBody
+            (
+                event.getPublicId(),
+                List.of()
+            );
+
+            mockMvc.perform(delete(DELETE_BASE_PATH)
+                    .header("Authorization", "Bearer " + jwt)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        }
+
+        @Test
+        @DisplayName("Request with a missing emails field returns 400")
+        void missingEmailsReturns400() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PRIVATE);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            String requestBody = """
+                {
+                    "publicId": "%s"
+                }
+                """.formatted(event.getPublicId());
+
+            mockMvc.perform(delete(DELETE_BASE_PATH)
+                    .header("Authorization", "Bearer " + jwt)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        }
+
+        @Test
+        @DisplayName("Request with a publicId longer than 36 characters returns 400")
+        void publicIdTooLongReturns400() throws Exception
+        {
+            createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            String requestBody = buildDeleteTicketsRequestBody
+            (
+                "a".repeat(37),
+                List.of("jon@example.com")
+            );
+
+            mockMvc.perform(delete(DELETE_BASE_PATH)
+                    .header("Authorization", "Bearer " + jwt)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        }
     }
 }
