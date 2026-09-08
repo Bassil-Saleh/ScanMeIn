@@ -240,18 +240,15 @@ interface EventActionsMenuProps {
 /**
  * EventActionsMenu is a drop-down menu providing the actions available
  * for a single event on the dashboard: viewing the event, editing the
- * event, creating an invitation for private events, publishing the event,
- * and canceling the event. Publishing and canceling each open a confirmation
- * dialog before sending a request to PATCH /api/v1/events/status. The menu
- * is closed when the user clicks outside of it or presses the Escape key.
+ * event, managing the event's registrations, creating an invitation for
+ * private events, publishing the event, and canceling the event. Publishing
+ * and canceling each open a confirmation dialog before sending a request to
+ * PATCH /api/v1/events/status. The menu is closed when the user clicks
+ * outside of it or presses the Escape key.
  * @param props the component's props
  * @returns JSX for the event's actions drop-down menu
  */
 function EventActionsMenu({ event, onStatusChange, onStatusError }: EventActionsMenuProps) {
-    // TODO: Add an additional "Manage Registrations" action to
-    //       take the user to the "Manage Event Registrations" page
-    //       at ManageEventRegistrationsPage.tsx
-
     const { authFetch } = useAuth();
 
     const [isOpen, setIsOpen] = useState(false);
@@ -351,6 +348,14 @@ function EventActionsMenu({ event, onStatusChange, onStatusError }: EventActions
                         onClick={() => setIsOpen(false)}
                     >
                         Edit Event
+                    </Link>
+                    <Link
+                        to={`/events/${event.publicId}/registrations`}
+                        className="dashboard__event-menu__item"
+                        role="menuitem"
+                        onClick={() => setIsOpen(false)}
+                    >
+                        Manage Registrations
                     </Link>
                     {event.eventType === 'PRIVATE' && (
                         <Link

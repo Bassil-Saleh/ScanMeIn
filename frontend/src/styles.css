@@ -1391,3 +1391,125 @@ textarea.form-input {
     color: var(--color-error);
     background-color: var(--color-error-bg);
 }
+
+/* --------------------------------------------------------------------------
+   27. Manage Event Registrations Page
+   -------------------------------------------------------------------------- */
+.manage-registrations {
+    padding: var(--space-xl) 0;
+}
+
+.manage-registrations__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-lg);
+    flex-wrap: wrap;
+    gap: var(--space-md);
+}
+
+.manage-registrations__title {
+    font-size: var(--font-size-2xl);
+}
+
+.manage-registrations__toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+    flex-wrap: wrap;
+}
+
+.manage-registrations__count {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+/* Horizontally scrollable wrapper so the wide registrations table stays
+   usable on small screens instead of overflowing the page. */
+.registrations-table__wrapper {
+    width: 100%;
+    overflow-x: auto;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.registrations-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--font-size-sm);
+}
+
+.registrations-table th,
+.registrations-table td {
+    padding: var(--space-sm) var(--space-md);
+    text-align: left;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--color-border);
+    white-space: nowrap;
+}
+
+.registrations-table thead th {
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    background-color: var(--color-bg);
+}
+
+.registrations-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.registrations-table tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.registrations-table__row--selected,
+.registrations-table__row--selected:hover {
+    background-color: var(--color-info-bg);
+}
+
+.registrations-table__email {
+    color: var(--color-text-secondary);
+}
+
+.registrations-table__datetime {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+}
+
+.registrations-table__present,
+.registrations-table__select {
+    text-align: center;
+    width: 1%;
+}
+
+.registrations-table__present input[type="checkbox"],
+.registrations-table__select input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+}
+
+/* The "present" checkbox only reports whether a ticket was scanned,
+   so it should not look clickable. */
+.registrations-table__present input[type="checkbox"] {
+    cursor: default;
+}
+
+.registrations-table__absent {
+    color: var(--color-error);
+    font-weight: 700;
+}
+
+@media (max-width: 768px) {
+    .manage-registrations__header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

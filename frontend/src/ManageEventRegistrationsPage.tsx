@@ -335,7 +335,7 @@ export function ManageEventRegistrationsPage() {
                                     <th scope="col">Middle Name</th>
                                     <th scope="col">Last Name</th>
                                     <th scope="col">Email Address</th>
-                                    <th scope="col">Present</th>
+                                    <th scope="col" className="registrations-table__present">Present</th>
                                     <th scope="col">Invitation Status</th>
                                     <th scope="col">Created</th>
                                     <th scope="col">Last Updated</th>
