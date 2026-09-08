@@ -42,6 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -80,6 +81,7 @@ class TicketControllerTest
 
     private static final String BASE_PATH = ApiPaths.BASE + ApiPaths.Tickets.ROOT + ApiPaths.Tickets.INVITATION;
     private static final String DELETE_BASE_PATH = ApiPaths.BASE + ApiPaths.Tickets.ROOT;
+    private static final String GET_BASE_PATH = ApiPaths.BASE + ApiPaths.Tickets.ROOT;
     private static final String TEST_EMAIL = "tickettest@example.com";
     private static final String TEST_PASSWORD = "securePassword123";
 
@@ -815,6 +817,95 @@ class TicketControllerTest
                     .content(requestBody))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /api/v1/tickets/{publicId}")
+    class GetTicketsByEventPublicIdTests
+    {
+        @Test
+        @DisplayName("Successful retrieval of multiple tickets returns 200")
+        void successfulMultipleTicketRetrievalReturns200() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PRIVATE);
+            Attendee attendee1 = createAttendee("jon@example.com");
+            Attendee attendee2 = createAttendee("jane@example.com");
+            attendee2.setFirstName("Jane");
+            attendee2.setMiddleName("Marie");
+            attendeeRepository.save(attendee2);
+            createTicket(event, attendee1);
+            createTicket(event, attendee2);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            mockMvc.perform(get(GET_BASE_PATH + "/" + event.getPublicId())
+                    .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tickets").isArray())
+                .andExpect(jsonPath("$.tickets.length()").value(2))
+                .andExpect(jsonPath("$.tickets[*].firstName").value(
+                    org.hamcrest.Matchers.containsInAnyOrder("Jon", "Jane")))
+                .andExpect(jsonPath("$.tickets[*].email").value(
+                    org.hamcrest.Matchers.containsInAnyOrder("jon@example.com", "jane@example.com")));
+        }
+
+        @Test
+        @DisplayName("Retrieved ticket shows present and invitationStatus fields")
+        void retrievedTicketShowsPresentAndInvitationStatus() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PRIVATE);
+            Attendee attendee = createAttendee("jon@example.com");
+            Ticket ticket = createTicket(event, attendee);
+            ticket.setPresent(true);
+            ticket.setInvitationStatus(com.ticketproject.webapp.model.enums.InvitationStatus.ACCEPTED);
+            ticketRepository.save(ticket);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            mockMvc.perform(get(GET_BASE_PATH + "/" + event.getPublicId())
+                    .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tickets.length()").value(1))
+                .andExpect(jsonPath("$.tickets[0].firstName").value("Jon"))
+                .andExpect(jsonPath("$.tickets[0].lastName").value("Smith"))
+                .andExpect(jsonPath("$.tickets[0].email").value("jon@example.com"))
+                .andExpect(jsonPath("$.tickets[0].present").value(true))
+                .andExpect(jsonPath("$.tickets[0].invitationStatus").value("ACCEPTED"));
+        }
+
+        @Test
+        @DisplayName("Retrieval for an event with no tickets returns 200 with an empty list")
+        void retrievalWithNoTicketsReturns200() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PRIVATE);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            mockMvc.perform(get(GET_BASE_PATH + "/" + event.getPublicId())
+                    .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tickets").isArray())
+                .andExpect(jsonPath("$.tickets.length()").value(0));
+        }
+
+        @Test
+        @DisplayName("Soft-deleted tickets are excluded from the result")
+        void softDeletedTicketsAreExcluded() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PRIVATE);
+            Attendee attendee = createAttendee("jon@example.com");
+            Ticket ticket = createTicket(event, attendee);
+            ticket.setDeletedAt(LocalDateTime.now());
+            ticketRepository.save(ticket);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            mockMvc.perform(get(GET_BASE_PATH + "/" + event.getPublicId())
+                    .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tickets").isArray())
+                .andExpect(jsonPath("$.tickets.length()").value(0));
         }
     }
 }
