@@ -248,6 +248,10 @@ interface EventActionsMenuProps {
  * @returns JSX for the event's actions drop-down menu
  */
 function EventActionsMenu({ event, onStatusChange, onStatusError }: EventActionsMenuProps) {
+    // TODO: Add an additional "Manage Registrations" action to
+    //       take the user to the "Manage Event Registrations" page
+    //       at ManageEventRegistrationsPage.tsx
+
     const { authFetch } = useAuth();
 
     const [isOpen, setIsOpen] = useState(false);
