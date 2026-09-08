@@ -907,5 +907,74 @@ class TicketControllerTest
                 .andExpect(jsonPath("$.tickets").isArray())
                 .andExpect(jsonPath("$.tickets.length()").value(0));
         }
+
+        @Test
+        @DisplayName("Retrieval without JWT returns 401")
+        void retrievalWithoutJwtReturns401() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PRIVATE);
+
+            mockMvc.perform(get(GET_BASE_PATH + "/" + event.getPublicId()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+        }
+
+        @Test
+        @DisplayName("Retrieval with invalid JWT returns 401")
+        void retrievalWithInvalidJwtReturns401() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PRIVATE);
+
+            mockMvc.perform(get(GET_BASE_PATH + "/" + event.getPublicId())
+                    .header("Authorization", "Bearer invalid.jwt.token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+        }
+
+        @Test
+        @DisplayName("Retrieving another host's tickets returns 401")
+        void retrievingAnotherHostsTicketsReturns401() throws Exception
+        {
+            EventHost host1 = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host1, EventType.PRIVATE);
+            Attendee attendee = createAttendee("jon@example.com");
+            createTicket(event, attendee);
+
+            createVerifiedEventHost("other@example.com", TEST_PASSWORD);
+            String otherJwt = loginAndGetJwt("other@example.com", TEST_PASSWORD);
+
+            mockMvc.perform(get(GET_BASE_PATH + "/" + event.getPublicId())
+                    .header("Authorization", "Bearer " + otherJwt))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+        }
+
+        @Test
+        @DisplayName("Retrieval for a non-existent event returns 404")
+        void nonExistentEventReturns404() throws Exception
+        {
+            createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            mockMvc.perform(get(GET_BASE_PATH + "/" + UUID.randomUUID().toString())
+                    .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+        }
+
+        @Test
+        @DisplayName("Retrieval with a public id longer than 36 characters returns 400")
+        void publicIdTooLongReturns400() throws Exception
+        {
+            createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            mockMvc.perform(get(GET_BASE_PATH + "/" + "a".repeat(37))
+                    .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        }
     }
 }
