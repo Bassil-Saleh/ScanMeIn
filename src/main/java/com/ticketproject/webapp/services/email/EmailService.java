@@ -4,6 +4,7 @@ import com.ticketproject.webapp.constants.AppConstants;
 import com.ticketproject.webapp.constants.FrontendPaths;
 import com.ticketproject.webapp.exceptions.EmailSendFailedException;
 import com.ticketproject.webapp.model.enums.EventType;
+import com.ticketproject.webapp.services.access.AccessControlService;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.EncodeHintType;
 import com.google.zxing.WriterException;
@@ -40,22 +41,56 @@ public class EmailService
     private final JavaMailSender mailSender;
     private final SpringTemplateEngine templateEngine;
     private final String frontendBaseUrl;
+    private final AccessControlService accessControlService;
 
     /**
      * Constructs a new EmailService with the required dependencies.
      * @param mailSender the mail sender for sending emails
      * @param templateEngine the Thymeleaf template engine for rendering email templates
+     * @param baseUrl the public frontend base URL used to build links in emails
+     * @param accessControlService the service enforcing the email allowlist
      */
     public EmailService
     (
         JavaMailSender mailSender,
         SpringTemplateEngine templateEngine,
-        @Value("${app.config.frontend-base-url}") String baseUrl
+        @Value("${app.config.frontend-base-url}") String baseUrl,
+        AccessControlService accessControlService
     )
     {
         this.mailSender = mailSender;
         this.templateEngine = templateEngine;
         this.frontendBaseUrl = baseUrl;
+        this.accessControlService = accessControlService;
+    }
+
+    /**
+     * Defense-in-depth guard: asserts a single recipient is on the allowlist
+     * before any email is sent. When the allowlist is disabled this is a no-op.
+     *
+     * @param toEmail the recipient's email address
+     */
+    private void requireAllowedRecipient(String toEmail)
+    {
+        accessControlService.requireEmailAllowed(toEmail);
+    }
+
+    /**
+     * Defense-in-depth guard: asserts every recipient is on the allowlist
+     * before any email is sent. When the allowlist is disabled this is a no-op.
+     *
+     * @param toEmails the recipients' email addresses
+     */
+    private void requireAllowedRecipients(List<String> toEmails)
+    {
+        if (toEmails == null)
+        {
+            return;
+        }
+        for (String toEmail : toEmails)
+        {
+            accessControlService.requireEmailAllowed(toEmail);
+        }
     }
 
     /**
@@ -66,6 +101,8 @@ public class EmailService
      */
     public void sendPasswordResetEmail(String toEmail, String rawToken)
     {
+        requireAllowedRecipient(toEmail);
+
         try
         {
             // Build the password reset URL.
@@ -121,6 +158,8 @@ public class EmailService
      */
     public void sendVerificationEmail(String toEmail, String rawToken)
     {
+        requireAllowedRecipient(toEmail);
+
         try
         {
             // Build the verification URL.
@@ -196,6 +235,8 @@ public class EmailService
         String postalCode
     )
     {
+        requireAllowedRecipient(toEmail);
+
         try
         {
             // Generate the QR code image from the public token.
@@ -284,6 +325,8 @@ public class EmailService
         String postalCode
     )
     {
+        requireAllowedRecipient(toEmail);
+
         try
         {
             // Build the acceptance and rejection decision URLs.
@@ -354,6 +397,8 @@ public class EmailService
         String inviteeMessage
     )
     {
+        requireAllowedRecipient(toEmail);
+
         try
         {
             // Prepare the Thymeleaf context with template variables.
@@ -434,6 +479,8 @@ public class EmailService
         String newPostalCode
     )
     {
+        requireAllowedRecipients(attendeeEmails);
+
         try
         {
             // Prepare the Thymeleaf context with template variables.
@@ -484,6 +531,8 @@ public class EmailService
         LocalDateTime newEndDateTime
     )
     {
+        requireAllowedRecipients(attendeeEmails);
+
         try
         {
             // Prepare the Thymeleaf context with template variables.
@@ -528,6 +577,8 @@ public class EmailService
         String newEventDescription
     )
     {
+        requireAllowedRecipients(attendeeEmails);
+
         try
         {
             // Prepare the Thymeleaf context with template variables.
@@ -571,6 +622,8 @@ public class EmailService
         Long newMaxAttendees
     )
     {
+        requireAllowedRecipients(attendeeEmails);
+
         try
         {
             // Prepare the Thymeleaf context with template variables.
@@ -614,6 +667,8 @@ public class EmailService
         String newEventName
     )
     {
+        requireAllowedRecipients(attendeeEmails);
+
         try
         {
             // Prepare the Thymeleaf context with template variables.
@@ -660,6 +715,8 @@ public class EmailService
         EventType newEventType
     )
     {
+        requireAllowedRecipients(attendeeEmails);
+
         try
         {
             // Prepare the Thymeleaf context with template variables.
