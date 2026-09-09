@@ -70,6 +70,17 @@ APP_JWT_SECRET_BASE64=$(openssl rand -base64 32)
 # Leave empty to keep the API same-origin only (recommended). Add a comma
 # separated list of origins if you run a separate frontend against this API.
 CORS_ALLOWED_ORIGINS=
+
+# --- Email allowlist -------------------------------------------------------
+# Leave EMPTY for open registration (local dev / home-network use).
+# Before deploying publicly, set this to a comma-separated list of the email
+# addresses and/or domains allowed to use the site, e.g.:
+#   ALLOWED_EMAIL_DOMAINS=you@yourdomain.com,yourdomain.com,friend@gmail.com
+# A bare domain (yourdomain.com) also matches its subdomains. Only allowed
+# addresses may register, log in, register for events, receive invitations,
+# or receive any email. This is the app-level gate that keeps random visitors
+# out even if the reverse proxy / Cloudflare Access layer is bypassed.
+ALLOWED_EMAIL_DOMAINS=
 EOF
 
 chmod 600 "$ENV_FILE"
