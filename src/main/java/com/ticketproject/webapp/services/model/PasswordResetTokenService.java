@@ -14,6 +14,7 @@ import com.ticketproject.webapp.model.repositories.PasswordResetTokenRepository;
 import com.ticketproject.webapp.services.database.BlindIndexService;
 import com.ticketproject.webapp.services.database.HashingService;
 import com.ticketproject.webapp.services.email.EmailService;
+import com.ticketproject.webapp.services.access.AccessControlService;
 import com.ticketproject.webapp.model.entities.PasswordResetToken;
 import com.ticketproject.webapp.model.entities.EventHost;
 import com.ticketproject.webapp.model.repositories.EventHostRepository;
@@ -31,6 +32,7 @@ public class PasswordResetTokenService
     private final EmailService emailService;
     private final BlindIndexService blindIndexService;
     private final HashingService hashingService;
+    private final AccessControlService accessControlService;
 
     public PasswordResetTokenService
     (
@@ -38,7 +40,8 @@ public class PasswordResetTokenService
         EventHostRepository eventHostRepository,
         EmailService emailService,
         BlindIndexService blindIndexService,
-        HashingService hashingService
+        HashingService hashingService,
+        AccessControlService accessControlService
     )
     {
         this.passwordResetTokenRepository = passwordResetTokenRepository;
@@ -46,6 +49,7 @@ public class PasswordResetTokenService
         this.emailService = emailService;
         this.blindIndexService = blindIndexService;
         this.hashingService = hashingService;
+        this.accessControlService = accessControlService;
     }
 
     /**
@@ -59,6 +63,15 @@ public class PasswordResetTokenService
      */
     public SingleMessageResponse createPasswordResetToken(CreatePasswordResetTokenRequest request)
     {
+        // If the email is not on the allowlist, return the same generic message
+        // used when no account exists, without creating or sending anything.
+        // This avoids revealing whether an account exists for a disallowed address.
+        if (!accessControlService.isEmailAllowed(request.email()))
+        {
+            return new SingleMessageResponse
+            ("If an account with the provided email address exists, a password reset token will be sent to that address.");
+        }
+
         // Check if there exists an event host account with the provided email address.
         byte[] emailBlindIndex = blindIndexService.computeIndex(request.email());
         Optional<EventHost> foundEventHost = eventHostRepository.findByEmailIndex(emailBlindIndex);

@@ -26,6 +26,7 @@ import com.ticketproject.webapp.model.repositories.EventRepository;
 import com.ticketproject.webapp.model.repositories.TicketRepository;
 import com.ticketproject.webapp.services.database.BlindIndexService;
 import com.ticketproject.webapp.services.email.EmailService;
+import com.ticketproject.webapp.services.access.AccessControlService;
 
 import jakarta.persistence.EntityNotFoundException;
 
@@ -47,6 +48,7 @@ public class AttendeeService
     private final TicketService ticketService;
     private final BlindIndexService blindIndexService;
     private final EmailService emailService;
+    private final AccessControlService accessControlService;
 
     public AttendeeService
     (
@@ -55,7 +57,8 @@ public class AttendeeService
         TicketRepository ticketRepository,
         TicketService ticketService,
         BlindIndexService blindIndexService,
-        EmailService emailService
+        EmailService emailService,
+        AccessControlService accessControlService
     )
     {
         this.attendeeRepository = attendeeRepository;
@@ -64,6 +67,7 @@ public class AttendeeService
         this.ticketService = ticketService;
         this.blindIndexService = blindIndexService;
         this.emailService = emailService;
+        this.accessControlService = accessControlService;
     }
 
     /**
@@ -76,6 +80,9 @@ public class AttendeeService
         CreatePublicEventRegistrationRequest request
     )
     {
+        // Enforce the email allowlist for the registering attendee.
+        accessControlService.requireEmailAllowed(request.email());
+
         Optional<Event> event = eventRepository.findByPublicId(request.publicId());
 
         if (event.isEmpty())
@@ -190,6 +197,9 @@ public class AttendeeService
         {
             throw new UnauthorizedException("Authentication required");
         }
+
+        // Enforce the email allowlist for the invited attendee.
+        accessControlService.requireEmailAllowed(request.email());
 
         if (request.publicId() == null)
         {
