@@ -576,4 +576,31 @@ public class GlobalExceptionHandler
         );
         return new ResponseEntity<ErrorResponse>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
     }
+
+    /**
+     * Handles AccessDeniedException by returning a 403 Forbidden response.
+     * This is thrown when an operation is attempted with an email address
+     * that is not permitted by the configured allowlist.
+     *
+     * @param ex      the exception that was thrown
+     * @param request the HTTP servlet request
+     * @return a ResponseEntity containing the error response and a 403 status
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied
+    (
+        AccessDeniedException ex,
+        HttpServletRequest request
+    )
+    {
+        ErrorResponse errorResponse = new ErrorResponse
+        (
+            Instant.now(),
+            HttpStatus.FORBIDDEN.value(),
+            HttpStatus.FORBIDDEN.getReasonPhrase(),
+            ex.getMessage(),
+            request.getRequestURI()
+        );
+        return new ResponseEntity<ErrorResponse>(errorResponse, HttpStatus.FORBIDDEN);
+    }
 }
