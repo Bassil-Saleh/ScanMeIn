@@ -21,6 +21,7 @@ import com.ticketproject.webapp.model.repositories.EventRepository;
 import com.ticketproject.webapp.services.database.BlindIndexService;
 import com.ticketproject.webapp.services.database.HashingService;
 import com.ticketproject.webapp.services.email.EmailService;
+import com.ticketproject.webapp.services.access.AccessControlService;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -44,6 +45,7 @@ public class EventHostService
     private final BlindIndexService blindIndexService;
     private final HashingService hashingService;
     private final EmailService emailService;
+    private final AccessControlService accessControlService;
 
     public EventHostService
     (
@@ -51,7 +53,8 @@ public class EventHostService
         BlindIndexService blindIndexService,
         HashingService hashingService,
         EventRepository eventRepository,
-        EmailService emailService
+        EmailService emailService,
+        AccessControlService accessControlService
     )
     {
         this.eventHostRepository = eventHostRepository;
@@ -59,6 +62,7 @@ public class EventHostService
         this.hashingService = hashingService;
         this.eventRepository = eventRepository;
         this.emailService = emailService;
+        this.accessControlService = accessControlService;
     }
 
     /**
@@ -72,6 +76,9 @@ public class EventHostService
      */
     public SingleMessageResponse createEventHost(CreateEventHostRequest request)
     {
+        // Enforce the email allowlist before doing any other work.
+        accessControlService.requireEmailAllowed(request.email());
+
         // Check if there already exists an event host account
         // using that same email address.
         byte[] emailBlinxIndex = blindIndexService.computeIndex(request.email());
@@ -259,6 +266,9 @@ public class EventHostService
         {
             throw new UnauthorizedException("Authentication required");
         }
+
+        // Enforce the email allowlist for the new address.
+        accessControlService.requireEmailAllowed(request.email());
 
         byte[] newEmailBlindIndex = blindIndexService.computeIndex(request.email());
         if (Arrays.equals(eventHost.getEmailBlindIndex(), newEmailBlindIndex))
