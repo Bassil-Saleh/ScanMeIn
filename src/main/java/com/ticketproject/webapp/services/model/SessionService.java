@@ -15,6 +15,7 @@ import com.ticketproject.webapp.model.repositories.SessionRepository;
 import com.ticketproject.webapp.services.database.BlindIndexService;
 import com.ticketproject.webapp.services.database.HashingService;
 import com.ticketproject.webapp.services.jwt.JwtService;
+import com.ticketproject.webapp.services.access.AccessControlService;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -36,6 +37,7 @@ public class SessionService
     private final BlindIndexService blindIndexService;
     private final HashingService hashingService;
     private final JwtService jwtService;
+    private final AccessControlService accessControlService;
 
     /**
      * Constructs a new SessionService with the required dependencies.
@@ -44,6 +46,7 @@ public class SessionService
      * @param blindIndexService the service for computing blind indexes
      * @param hashingService the service for hashing and verifying tokens/passwords
      * @param jwtService the service for generating and validating JWTs
+     * @param accessControlService the service enforcing the email allowlist
      */
     public SessionService
     (
@@ -51,7 +54,8 @@ public class SessionService
         EventHostRepository eventHostRepository,
         BlindIndexService blindIndexService,
         HashingService hashingService,
-        JwtService jwtService
+        JwtService jwtService,
+        AccessControlService accessControlService
     )
     {
         this.sessionRepository = sessionRepository;
@@ -59,6 +63,7 @@ public class SessionService
         this.blindIndexService = blindIndexService;
         this.hashingService = hashingService;
         this.jwtService = jwtService;
+        this.accessControlService = accessControlService;
     }
 
     /**
@@ -81,6 +86,14 @@ public class SessionService
      */
     public LoginSessionResponse login(LoginSessionRequest request)
     {
+        // Enforce the email allowlist. Throw the same generic credentials error
+        // used for wrong email/password so a disallowed address does not reveal
+        // whether an account exists.
+        if (!accessControlService.isEmailAllowed(request.email()))
+        {
+            throw new InvalidCredentialsException("Invalid email address or password");
+        }
+
         // Look up the EventHost by email blind index.
         byte[] emailBlindIndex = blindIndexService.computeIndex(request.email());
         Optional<EventHost> foundEventHost = eventHostRepository.findByEmailIndex(emailBlindIndex);
