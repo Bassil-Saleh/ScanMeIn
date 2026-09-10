@@ -73,6 +73,7 @@ class EventHostControllerAllowlistTest
             .email(email)
             .plaintextPassword(password)
             .build();
+        host.generateVerificationToken();
         host.setVerified(true);
         return eventHostRepository.save(host);
     }
@@ -129,6 +130,48 @@ class EventHostControllerAllowlistTest
         mockMvc.perform(post(BASE_PATH)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(buildCreateBody(DISALLOWED_EMAIL)))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    @DisplayName("Login with a disallowed email returns 401 even if the account exists")
+    void loginWithDisallowedEmailReturns401() throws Exception
+    {
+        // Create an account at a disallowed domain directly in the repository.
+        createVerifiedEventHost(DISALLOWED_EMAIL, PASSWORD);
+
+        String body = """
+            {
+                "email": "%s",
+                "password": "%s"
+            }
+            """.formatted(DISALLOWED_EMAIL, PASSWORD);
+
+        mockMvc.perform(post(LOGIN_PATH)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.status").value(401));
+    }
+
+    @Test
+    @DisplayName("Changing email to a disallowed address returns 403")
+    void emailChangeToDisallowedReturns403() throws Exception
+    {
+        createVerifiedEventHost(ALLOWED_EMAIL, PASSWORD);
+        String jwt = loginAndGetJwt(ALLOWED_EMAIL, PASSWORD);
+
+        String body = """
+            {
+                "email": "%s"
+            }
+            """.formatted(DISALLOWED_EMAIL);
+
+        mockMvc.perform(patch(BASE_PATH + ApiPaths.EventHosts.EMAIL)
+                .header("Authorization", "Bearer " + jwt)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.status").value(403));
     }
