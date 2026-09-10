@@ -102,6 +102,35 @@ Manage the stack with `make status`, `make logs`, `make down`, and
 > `make bootstrap` only if you want fresh secrets (this does NOT delete
 > database data; use `make clean` for that).
 
+### Restricting access with an email allowlist (public deployments)
+
+By default registration is open, which is what you want on a trusted home
+network. Before deploying the stack to a public server (e.g. an EC2 instance)
+where you do **not** want strangers creating accounts, set the
+`ALLOWED_EMAIL_DOMAINS` value in `.env` to a comma-separated list of the email
+addresses and/or domains that are allowed to use the site:
+
+```
+# Only these people can register, log in, register for events,
+# receive invitations, or receive any email from the app.
+ALLOWED_EMAIL_DOMAINS=you@yourdomain.com,yourdomain.com,friend@gmail.com
+```
+
+- An entry containing `@` (e.g. `you@yourdomain.com`) must match exactly.
+- A bare domain (e.g. `yourdomain.com`) matches any address at that domain and
+  its subdomains. Matching is case-insensitive.
+- Leaving it **empty** disables the allowlist (open registration).
+
+After editing `.env`, run `make restart` (or `docker compose up -d`) to apply.
+Anyone whose email is not on the list receives a `403 Forbidden` when trying to
+register, and login attempts for disallowed addresses fail with the same generic
+"invalid credentials" message used for a wrong password (so the response does
+not reveal whether an account exists). This app-level gate works even if a
+reverse-proxy or Cloudflare Access layer in front of the site is bypassed, and
+it complements (rather than replaces) network-level controls such as an EC2
+security group that only exposes ports 22/443 and keeps Mailpit reachable only
+over an SSH tunnel.
+
 ## Local Development Setup (without Docker)
 
 1. Clone this Git repository to your local machine.
