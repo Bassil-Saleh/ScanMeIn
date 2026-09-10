@@ -136,7 +136,7 @@ public class EmailService
             );
             helper.setFrom
             (
-                AppConstants.Email.FROM_ADDRESS,
+                this.fromAddress,
                 AppConstants.Project.PROJECT_NAME
             );
             helper.setTo(toEmail);
@@ -193,7 +193,7 @@ public class EmailService
             );
             helper.setFrom
             (
-                AppConstants.Email.FROM_ADDRESS,
+                this.fromAddress,
                 AppConstants.Project.PROJECT_NAME
             );
             helper.setTo(toEmail);
@@ -278,7 +278,7 @@ public class EmailService
             );
             helper.setFrom
             (
-                AppConstants.Email.FROM_ADDRESS,
+                this.fromAddress,
                 AppConstants.Project.PROJECT_NAME
             );
             helper.setTo(toEmail);
@@ -372,7 +372,7 @@ public class EmailService
             );
             helper.setFrom
             (
-                AppConstants.Email.FROM_ADDRESS,
+                this.fromAddress,
                 AppConstants.Project.PROJECT_NAME
             );
             helper.setTo(toEmail);
@@ -440,7 +440,7 @@ public class EmailService
             );
             helper.setFrom
             (
-                AppConstants.Email.FROM_ADDRESS,
+                this.fromAddress,
                 AppConstants.Project.PROJECT_NAME
             );
             helper.setTo(toEmail);
@@ -789,7 +789,7 @@ public class EmailService
             );
             helper.setFrom
             (
-                AppConstants.Email.FROM_ADDRESS,
+                this.fromAddress,
                 AppConstants.Project.PROJECT_NAME
             );
             helper.setTo(toEmail);
