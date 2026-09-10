@@ -34,6 +34,11 @@ services:
       - ticketnet
 
   mailpit:
+    # Only started on a local/home-network deployment via `--profile local`
+    # (i.e. `make up`). A plain `docker compose up -d` (or `make up-aws`) does
+    # NOT start Mailpit, which is what you want on a public server such as EC2
+    # where outgoing email goes to Amazon SES instead.
+    profiles: ["local"]
     image: axllent/mailpit:v1.31.0
     container_name: ticketproject-mailpit
     restart: unless-stopped
@@ -66,13 +71,27 @@ services:
       # Empty = allowlist disabled (open registration). Set it before a public
       # deployment so only approved addresses can register / log in / receive email.
       ALLOWED_EMAIL_DOMAINS: ${ALLOWED_EMAIL_DOMAINS:-}
-      SMTP_HOST: mailpit
-      SMTP_PORT: 1025
+      # Email transport. Defaults point at the Mailpit container (started only
+      # with `--profile local` on a home network). On a public server (EC2), set
+      # these in .env to your Amazon SES SMTP endpoint + credentials, e.g.
+      #   SMTP_HOST=email-smtp.us-east-1.amazonaws.com  SMTP_PORT=587
+      #   SMTP_AUTH=true  SMTP_STARTTLS=true  SMTP_USERNAME=...  SMTP_PASSWORD=...
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_AUTH: ${SMTP_AUTH:-false}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+      # Sender address. Must be a verified SES identity/domain on EC2.
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-noreply@ticketproject.local}
     depends_on:
       mariadb:
         condition: service_healthy
       mailpit:
         condition: service_started
+        # The backend must still start when the "local" profile is inactive
+        # (i.e. Mailpit is not running, as on EC2).
+        required: false
     networks:
       - ticketnet
 

@@ -92,7 +92,7 @@ Assuming your chosen hostname is `ticketproject.local`:
 | What | Where |
 | --- | --- |
 | App (HTTPS) | `https://ticketproject.local` |
-| Mailpit web UI (emails + QR codes) | `http://ticketproject.local:8025` |
+| Mailpit web UI (emails + QR codes), `local` profile only | `http://ticketproject.local:8025` |
 | Swagger API docs | `https://ticketproject.local/swagger-ui/index.html` |
 
 Manage the stack with `make status`, `make logs`, `make down`, and
@@ -128,8 +128,73 @@ register, and login attempts for disallowed addresses fail with the same generic
 not reveal whether an account exists). This app-level gate works even if a
 reverse-proxy or Cloudflare Access layer in front of the site is bypassed, and
 it complements (rather than replaces) network-level controls such as an EC2
-security group that only exposes ports 22/443 and keeps Mailpit reachable only
-over an SSH tunnel.
+security group that only exposes ports 22/443.
+
+## Deploying to a Public Server (EC2) with Amazon SES
+
+On a public server you should **not** run Mailpit (its web UI would expose every
+email, including password-reset links and ticket QR codes, to anyone who can
+reach the port). Instead, the backend sends email through **Amazon SES** using
+its SMTP interface. The same Docker image and `compose.yaml` are used for both
+deployments, only the environment changes.
+
+### How the two deployments differ
+
+| | Home network | Public server (EC2) |
+| --- | --- | --- |
+| Start command | `make up` (`docker compose --profile local up -d`) | `make up-aws` (`docker compose up -d`) |
+| Mailpit | Started (web UI on `8025`) | **Not started** (no `local` profile) |
+| Email transport | Mailpit SMTP (`mailpit:1025`, no auth/TLS) | Amazon SES SMTP (`email-smtp.<region>.amazonaws.com:587`, auth + STARTTLS) |
+| `MAIL_FROM_ADDRESS` | `noreply@ticketproject.local` (default) | A **verified** SES identity/domain |
+
+Because `SMTP_*` values in `compose.yaml` default to Mailpit, a home-network
+deployment needs no extra configuration; an EC2 deployment just overrides them
+in `.env`.
+
+### One-time Amazon SES setup
+
+1. **Verify your sender identity.** In the SES console, verify the domain you
+   own (recommended: add the DKIM records SES gives you) or a single email
+   address. Your `MAIL_FROM_ADDRESS` must match a verified identity, e.g.
+   `noreply@yourdomain.com`.
+2. **Create SMTP credentials.** In SES → *SMTP settings*, create SMTP
+   credentials. This provisions an IAM user scoped to sending email. Keep the
+   username/password secret: they go in `.env` (gitignored, `chmod 600`).
+3. **Note your region + endpoint.** The SMTP host is
+   `email-smtp.<region>.amazonaws.com` (e.g. `us-east-1`). Use port `587` with
+   STARTTLS.
+4. **Sandbox vs production.** New SES accounts are in the **sandbox**: you can
+   only send to *verified* recipients. This pairs well with
+   `ALLOWED_EMAIL_DOMAINS`. To send to anyone, request production access from
+   the SES console.
+
+### Configure `.env` on the EC2 instance
+
+Uncomment/set the SMTP block (added by `scripts/init-secrets.sh`):
+
+```
+SMTP_HOST=email-smtp.us-east-1.amazonaws.com
+SMTP_PORT=587
+SMTP_USERNAME=<SES SMTP username>
+SMTP_PASSWORD=<SES SMTP password>
+SMTP_AUTH=true
+SMTP_STARTTLS=true
+MAIL_FROM_ADDRESS=noreply@yourdomain.com
+```
+
+Then start the stack **without** Mailpit:
+
+```
+make up-aws      # equivalent to: docker compose up -d
+```
+
+Confirm Mailpit is absent with `docker compose ps` (there should be no
+`ticketproject-mailpit` container). The backend still starts because its
+`depends_on: mailpit` is marked `required: false`.
+
+> Also remember to set `FRONTEND_BASE_URL` to your real public HTTPS URL and
+> use a publicly-trusted certificate (e.g. Caddy's automatic Let's Encrypt or
+> Cloudflare) instead of the mkcert LAN certificate used on the home network.
 
 ## Local Development Setup (without Docker)
 

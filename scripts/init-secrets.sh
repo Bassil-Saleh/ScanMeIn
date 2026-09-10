@@ -81,6 +81,31 @@ CORS_ALLOWED_ORIGINS=
 # or receive any email. This is the app-level gate that keeps random visitors
 # out even if the reverse proxy / Cloudflare Access layer is bypassed.
 ALLOWED_EMAIL_DOMAINS=
+
+# --- Email transport (SMTP) --------------------------------------------------
+# By default the stack uses the Mailpit container (see compose.yaml), which
+# needs NO SMTP credentials/TLS and is started only with \`--profile local\`
+# (i.e. \`make up\`) on your home network. Leave the values below unset for that.
+#
+# On a public server such as EC2 you do NOT want Mailpit. Start the stack with a
+# plain \`docker compose up -d\` (or \`make up-aws\`) and set these to your Amazon
+# SES SMTP endpoint + credentials:
+#   SMTP_HOST=email-smtp.<region>.amazonaws.com
+#   SMTP_PORT=587
+#   SMTP_USERNAME=<SES SMTP username>
+#   SMTP_PASSWORD=<SES SMTP password>
+#   SMTP_AUTH=true
+#   SMTP_STARTTLS=true
+#   MAIL_FROM_ADDRESS=noreply@yourdomain.com   # must be a verified SES identity
+# Note: SES sandbox accounts can only send to VERIFIED recipients until you
+# request production access.
+# SMTP_HOST=
+# SMTP_PORT=
+# SMTP_USERNAME=
+# SMTP_PASSWORD=
+# SMTP_AUTH=
+# SMTP_STARTTLS=
+# MAIL_FROM_ADDRESS=
 EOF
 
 chmod 600 "$ENV_FILE"

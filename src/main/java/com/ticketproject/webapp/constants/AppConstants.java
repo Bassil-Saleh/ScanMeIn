@@ -1046,6 +1046,11 @@ public final class AppConstants
             throw new UnsupportedOperationException(NO_CONSTRUCTION_MSG);
         }
 
+        /**
+         * Default sender address used when {@code app.config.mail.from-address}
+         * (env {@code MAIL_FROM_ADDRESS}) is not set, e.g. local/Mailpit use.
+         * On Amazon SES this MUST be overridden with a verified identity/domain.
+         */
         public static final String FROM_ADDRESS = "noreply@ticketproject.local";
         public static final String CHARACTER_ENCODING = "UTF-8";
 

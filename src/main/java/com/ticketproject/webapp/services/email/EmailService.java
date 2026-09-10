@@ -42,6 +42,7 @@ public class EmailService
     private final SpringTemplateEngine templateEngine;
     private final String frontendBaseUrl;
     private final AccessControlService accessControlService;
+    private final String fromAddress;
 
     /**
      * Constructs a new EmailService with the required dependencies.
@@ -49,19 +50,25 @@ public class EmailService
      * @param templateEngine the Thymeleaf template engine for rendering email templates
      * @param baseUrl the public frontend base URL used to build links in emails
      * @param accessControlService the service enforcing the email allowlist
+     * @param fromAddress the sender address used on outgoing emails. Defaults to
+     *                    the local/Mailpit address; on Amazon SES it MUST be a
+     *                    verified identity/domain (set via
+     *                    {@code app.config.mail.from-address} / {@code MAIL_FROM_ADDRESS}).
      */
     public EmailService
     (
         JavaMailSender mailSender,
         SpringTemplateEngine templateEngine,
         @Value("${app.config.frontend-base-url}") String baseUrl,
-        AccessControlService accessControlService
+        AccessControlService accessControlService,
+        @Value("${app.config.mail.from-address:noreply@ticketproject.local}") String fromAddress
     )
     {
         this.mailSender = mailSender;
         this.templateEngine = templateEngine;
         this.frontendBaseUrl = baseUrl;
         this.accessControlService = accessControlService;
+        this.fromAddress = fromAddress;
     }
 
     /**
