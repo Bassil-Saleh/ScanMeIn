@@ -141,4 +141,39 @@ class AccessControlServiceTest
             service.requireEmailAllowed("alice@allowed.com");
         }
     }
+
+    @Nested
+    @DisplayName("Config parsing edge cases")
+    class ParsingEdgeCases
+    {
+        @Test
+        @DisplayName("whitespace around entries is trimmed")
+        void trimsEntries()
+        {
+            AccessControlService service = new AccessControlService("  allowed.com ,  me@mydomain.io  ");
+
+            assertThat(service.isEmailAllowed("alice@allowed.com")).isTrue();
+            assertThat(service.isEmailAllowed("me@mydomain.io")).isTrue();
+        }
+
+        @Test
+        @DisplayName("empty entries between commas are ignored")
+        void ignoresEmptyEntries()
+        {
+            AccessControlService service = new AccessControlService("allowed.com,, ,me@mydomain.io");
+
+            assertThat(service.isEmailAllowed("alice@allowed.com")).isTrue();
+            assertThat(service.isEmailAllowed("me@mydomain.io")).isTrue();
+            assertThat(service.isEmailAllowed("eve@evil.com")).isFalse();
+        }
+
+        @Test
+        @DisplayName("a config of only commas/whitespace disables the allowlist")
+        void onlySeparatorsDisables()
+        {
+            AccessControlService service = new AccessControlService(" , , ");
+
+            assertThat(service.isEmailAllowed("anyone@example.com")).isTrue();
+        }
+    }
 }

@@ -56,12 +56,21 @@ public class AccessControlService
             return;
         }
 
-        this.allowlistDisabled = false;
-
         List<String> entries = Stream.of(allowedEmailDomainsRaw.split(","))
             .map(entry -> entry.trim().toLowerCase(Locale.ROOT))
             .filter(entry -> !entry.isEmpty())
             .toList();
+
+        // In case the allowlist only consists of commas and whitespace.
+        if (entries.isEmpty())
+        {
+            this.allowlistDisabled = true;
+            this.allowedEmails = Set.of();
+            this.allowedDomains = Set.of();
+            return;
+        }
+
+        this.allowlistDisabled = false;
 
         this.allowedEmails = entries.stream()
             .filter(entry -> entry.contains("@"))
