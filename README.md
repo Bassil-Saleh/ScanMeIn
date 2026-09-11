@@ -68,7 +68,7 @@ From the repository root:
 
 ```
 make bootstrap   # generates .env secrets + TLS certificates
-make build       # builds the backend and frontend images
+make build       # builds the backend, frontend, and Caddy images
 make up          # starts the whole stack
 ```
 
@@ -142,7 +142,9 @@ deployments, only the environment changes.
 
 | | Home network | Public server (EC2) |
 | --- | --- | --- |
-| Start command | `make up` (`docker compose --profile local up -d`) | `make up-aws` (`docker compose up -d`) |
+| Start command | `make up` (`TLS_MODE=local docker compose --profile local up -d`) | `make up-aws` (`TLS_MODE=public docker compose up -d`) |
+| `TLS_MODE` | `local` | `public` |
+| Certificate (Caddy) | mkcert LAN cert from `certs/` | Let's Encrypt via Cloudflare DNS-01 |
 | Mailpit | Started (web UI on `8025`) | **Not started** (no `local` profile) |
 | Teardown command | `make down` / `make clean` (`docker compose --profile local down [-v]`) | The **same** command (because Mailpit was never created, the `--profile local` portion contributes nothing to the rest of the command's behavior) |
 | Email transport | Mailpit SMTP (`mailpit:1025`, no auth/TLS) | Amazon SES SMTP (`email-smtp.<region>.amazonaws.com:587`, auth + STARTTLS) |
@@ -193,9 +195,70 @@ Confirm Mailpit is absent with `docker compose ps` (there should be no
 `ticketproject-mailpit` container). The backend still starts because its
 `depends_on: mailpit` is marked `required: false`.
 
-> Also remember to set `FRONTEND_BASE_URL` to your real public HTTPS URL and
-> use a publicly-trusted certificate (e.g. Caddy's automatic Let's Encrypt or
-> Cloudflare) instead of the mkcert LAN certificate used on the home network.
+### Public HTTPS certificate (Let's Encrypt via Cloudflare DNS-01)
+
+On a public server you must serve a **publicly-trusted** certificate instead of
+the mkcert LAN certificate used at home. The stack obtains one automatically
+from **Let's Encrypt** using Caddy's **DNS-01** challenge through Cloudflare,
+which is what lets it work when:
+
+- the hostname is proxied through Cloudflare (orange-cloud), and/or
+- inbound port 80 is not open to the internet (the EC2 security group only
+  allows 22/443).
+
+The same `compose.yaml`, `Caddyfile`, and custom Caddy image are used for both
+deployments; only `TLS_MODE` (and a few extra variables) change. `TLS_MODE` is
+set by the Makefile target (`make up` forces `local`, `make up-aws` forces
+`public`), so you normally do not have to touch it.
+
+#### One-time Cloudflare setup
+
+1. Make sure `SITE_HOST` is a real FQDN (e.g. `tickets.example.com`) whose DNS
+   zone is managed by **Cloudflare**, and that it resolves to the server's
+   public IP. A proxied ("orange-cloud") A/AAAA record is fine, because DNS-01
+   does not need the HTTP path to reach the origin.
+2. Create a scoped **API token** at
+   <https://dash.cloudflare.com/profile/api-tokens> with the permissions
+   **Zone → Zone → Read** and **Zone → DNS → Edit** for that zone. Keep it
+   secret.
+
+#### Configure `.env` on the EC2 instance
+
+In addition to the Amazon SES settings above, set the certificate variables
+(added by `scripts/init-secrets.sh`). These must be present **before** you run
+`make up-aws`:
+
+```
+SITE_HOST=tickets.example.com
+FRONTEND_BASE_URL=https://tickets.example.com
+TLS_MODE=public
+ACME_EMAIL=you@yourdomain.com
+CLOUDFLARE_API_TOKEN=<your scoped Cloudflare API token>
+```
+
+#### Build and start
+
+```
+make build       # builds the custom Caddy image (with the Cloudflare DNS module)
+make up-aws      # TLS_MODE=public, no Mailpit, email via Amazon SES
+```
+
+Watch Caddy obtain the certificate:
+
+```
+docker compose logs -f caddy
+```
+
+The first start performs the DNS-01 challenge and stores the certificate (and
+the ACME account) in the `caddy_data` named volume; renewals then happen
+automatically. **Do not delete `caddy_data`** unless you intend to re-issue the
+certificate (Let's Encrypt enforces rate limits).
+
+> You can front the hostname with **Cloudflare Access** to restrict who may
+> reach the site while you are still developing it. Because the certificate is
+> obtained via DNS-01 and stored on the origin, adding or later removing
+> Cloudflare Access requires **no certificate change**: when the site is ready
+> for the public you simply disable Access.
 
 ## Local Development Setup (without Docker)
 
