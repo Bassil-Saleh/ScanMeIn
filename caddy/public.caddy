@@ -1,0 +1,30 @@
+# Caddy TLS snippet for the PUBLIC server deployment (TLS_MODE=public), e.g. an
+# AWS EC2 instance fronted by Cloudflare.
+#
+# Imported by ../Caddyfile. This tells Caddy to obtain and automatically renew
+# a real, publicly-trusted Let's Encrypt certificate for {$SITE_HOST} by solving
+# the ACME DNS-01 challenge through the Cloudflare DNS provider module (compiled
+# into the custom image built by caddy.Dockerfile).
+#
+# DNS-01 is used (instead of the default HTTP-01/TLS-ALPN-01) because:
+#   * it works when the hostname is proxied through Cloudflare (orange-cloud),
+#     which would otherwise interfere with HTTP-01/TLS-ALPN-01, and
+#   * it never requires inbound port 80 to be reachable from the internet.
+#
+# Requirements (see README "Public server deployment"):
+#   * SITE_HOST must be a real public FQDN whose zone is managed by Cloudflare.
+#   * ACME_EMAIL is the contact address Let's Encrypt uses for expiry/revocation
+#     notices (optional, but strongly recommended). If left empty, Caddy issues
+#     the certificate without registering a contact email.
+#   * CLOUDFLARE_API_TOKEN must be a scoped Cloudflare API token with the
+#     permissions Zone.Zone:Read AND Zone.DNS:Edit for the relevant zone. It is
+#     read at RUNTIME via the {env.CLOUDFLARE_API_TOKEN} placeholder, so it is
+#     never baked into the configuration or cached in the Caddy autosave config.
+#
+# resolvers 1.1.1.1 forces Caddy to query Cloudflare's own resolver when waiting
+# for the _acme-challenge TXT record to propagate, avoiding "timed out waiting
+# for record to fully propagate" errors caused by a caching local resolver.
+tls {$ACME_EMAIL} {
+    dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+    resolvers 1.1.1.1
+}
