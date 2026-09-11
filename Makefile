@@ -5,7 +5,12 @@
 #   make build      Build the backend and frontend Docker images.
 #   make up         Start the full stack in the background.
 #   make down       Stop and remove the stack (data volume is preserved).
-#   make logs       Tail logs from all services.
+#                   Teardown always activates the "local" profile so the Mailpit
+#                   container is removed too; otherwise it stays attached to the
+#                   ticketnet network and Docker refuses to delete that network
+#                   ("Network ticket_project_ticketnet Resource is still in use").
+#   make logs       Tail logs from all services (also activates the "local"
+#                   profile, otherwise Mailpit's logs are skipped entirely).
 #   make status     Show the status of all services.
 
 .PHONY: bootstrap build up up-aws down restart logs status clean help
@@ -27,16 +32,16 @@ up-aws: ## Start the stack WITHOUT Mailpit (public server / EC2, email via Amazo
 	docker compose up -d
 
 down: ## Stop and remove the stack (data volume preserved).
-	docker compose down
+	docker compose --profile local down
 
 restart: down up ## Restart the full stack.
 
-logs: ## Tail logs from all services.
-	docker compose logs -f
+logs: ## Tail logs from all services (includes Mailpit).
+	docker compose --profile local logs -f
 
 status: ## Show the status of all services.
 	docker compose ps
 
 clean: ## Stop the stack AND delete the MariaDB data volume.
-	docker compose down -v
+	docker compose --profile local down -v
 	@echo "Note: this removed the mariadb_data volume (database data)."

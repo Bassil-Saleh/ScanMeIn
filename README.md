@@ -144,6 +144,7 @@ deployments, only the environment changes.
 | --- | --- | --- |
 | Start command | `make up` (`docker compose --profile local up -d`) | `make up-aws` (`docker compose up -d`) |
 | Mailpit | Started (web UI on `8025`) | **Not started** (no `local` profile) |
+| Teardown command | `make down` / `make clean` (`docker compose --profile local down [-v]`) | The **same** command (because Mailpit was never created, the `--profile local` portion contributes nothing to the rest of the command's behavior) |
 | Email transport | Mailpit SMTP (`mailpit:1025`, no auth/TLS) | Amazon SES SMTP (`email-smtp.<region>.amazonaws.com:587`, auth + STARTTLS) |
 | `MAIL_FROM_ADDRESS` | `noreply@ticketproject.local` (default) | A **verified** SES identity/domain |
 
