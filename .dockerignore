@@ -18,6 +18,7 @@ src/test/resources/application-test.properties
 
 # Docker / deploy files not needed inside the app image
 Caddyfile
+caddy
 compose.yaml
 docker-compose*.yml
 *.Dockerfile
