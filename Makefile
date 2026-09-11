@@ -13,7 +13,7 @@
 #                   profile, otherwise Mailpit's logs are skipped entirely).
 #   make status     Show the status of all services.
 
-.PHONY: bootstrap build up up-aws down restart logs status clean help
+.PHONY: bootstrap build up up-aws down logs status clean help
 
 help: ## Show this help.
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -33,8 +33,6 @@ up-aws: ## Start the stack WITHOUT Mailpit (public server / EC2, email via Amazo
 
 down: ## Stop and remove the stack (data volume preserved).
 	docker compose --profile local down
-
-restart: down up ## Restart the full stack.
 
 logs: ## Tail logs from all services (includes Mailpit).
 	docker compose --profile local logs -f

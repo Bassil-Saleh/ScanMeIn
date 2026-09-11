@@ -95,8 +95,8 @@ Assuming your chosen hostname is `ticketproject.local`:
 | Mailpit web UI (emails + QR codes), `local` profile only | `http://ticketproject.local:8025` |
 | Swagger API docs | `https://ticketproject.local/swagger-ui/index.html` |
 
-Manage the stack with `make status`, `make logs`, `make down`, and
-`make restart`. Run `make help` to list all targets.
+Manage the stack with `make status`, `make logs`, `make down`.
+Run `make help` to list all targets.
 
 > Secrets live in the gitignored `.env` file. Delete it and re-run
 > `make bootstrap` only if you want fresh secrets (this does NOT delete
@@ -121,7 +121,7 @@ ALLOWED_EMAIL_DOMAINS=you@yourdomain.com,yourdomain.com,friend@gmail.com
   its subdomains. Matching is case-insensitive.
 - Leaving it **empty** disables the allowlist (open registration).
 
-After editing `.env`, run `make restart` (or `docker compose up -d`) to apply.
+After editing `.env`, run `make up-aws` to apply.
 Anyone whose email is not on the list receives a `403 Forbidden` when trying to
 register, and login attempts for disallowed addresses fail with the same generic
 "invalid credentials" message used for a wrong password (so the response does
