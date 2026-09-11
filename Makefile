@@ -1,9 +1,14 @@
-# Makefile for the Ticket Project home-network Docker deployment.
+# Makefile for the Ticket Project Docker deployment (home network and public
+# server). The deployment type is selected by the target, which sets TLS_MODE:
+#   make up       -> TLS_MODE=local  (home/LAN, mkcert certificate, + Mailpit)
+#   make up-aws   -> TLS_MODE=public (public server, Let's Encrypt via the
+#                    Cloudflare DNS-01 challenge, no Mailpit, email via SES)
 #
 # Common targets:
 #   make bootstrap  Generate .env secrets and TLS certs (first time only).
-#   make build      Build the backend and frontend Docker images.
-#   make up         Start the full stack in the background.
+#   make build      Build the backend, frontend, and custom Caddy Docker images.
+#   make up         Start the full stack in the background (home network).
+#   make up-aws     Start the stack for a public server (EC2, Let's Encrypt).
 #   make down       Stop and remove the stack (data volume is preserved).
 #                   Teardown always activates the "local" profile so the Mailpit
 #                   container is removed too; otherwise it stays attached to the
@@ -22,14 +27,14 @@ bootstrap: ## Generate .env secrets and TLS certificates (first time only).
 	./scripts/init-secrets.sh
 	./scripts/make-certs.sh
 
-build: ## Build the backend and frontend Docker images.
+build: ## Build the backend, frontend, and custom Caddy Docker images.
 	docker compose build
 
 up: ## Start the full stack in the background (home network, includes Mailpit).
-	docker compose --profile local up -d
+	TLS_MODE=local docker compose --profile local up -d
 
-up-aws: ## Start the stack WITHOUT Mailpit (public server / EC2, email via Amazon SES).
-	docker compose up -d
+up-aws: ## Start the stack for a public server (EC2): Let's Encrypt cert, no Mailpit, email via Amazon SES.
+	TLS_MODE=public docker compose up -d
 
 down: ## Stop and remove the stack (data volume preserved).
 	docker compose --profile local down
