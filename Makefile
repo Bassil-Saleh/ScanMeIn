@@ -18,7 +18,7 @@
 #                   profile, otherwise Mailpit's logs are skipped entirely).
 #   make status     Show the status of all services.
 
-.PHONY: bootstrap build up up-aws down logs status clean help
+.PHONY: bootstrap build up up-aws down logs status clean distclean help
 
 help: ## Show this help.
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -48,3 +48,17 @@ status: ## Show the status of all services.
 clean: ## Stop the stack AND delete the MariaDB data volume.
 	docker compose --profile local down -v
 	@echo "Note: this removed the mariadb_data volume (database data)."
+
+# Full reset for re-testing a deployment on a clean slate. It removes everything
+# 'clean' does PLUS the built images, the build cache, the generated .env, and
+# the TLS certs. Because both .env (secrets) and mariadb_data (encrypted rows)
+# are deleted together, rotating the keys never orphans existing data.
+distclean: ## Full reset: remove the stack, its volumes, built images, build cache, plus .env and certs/.
+	docker compose --profile local down -v --remove-orphans
+	-docker rmi -f ticketproject-caddy:latest
+	docker image prune -f
+	docker builder prune -f
+	rm -f .env
+	rm -rf certs
+	@echo "Full reset complete: containers, volumes, built images, build cache, .env, and certs/ removed."
+	@echo "Rebuild from scratch with: make bootstrap && make build"
