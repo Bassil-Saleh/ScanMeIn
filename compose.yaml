@@ -105,17 +105,48 @@ services:
       - ticketnet
 
   caddy:
-    image: caddy:2-alpine
+    # Custom image (see caddy.Dockerfile) with the Cloudflare DNS provider
+    # module compiled in, so the PUBLIC deployment (TLS_MODE=public) can obtain
+    # a Let's Encrypt certificate via the DNS-01 challenge. The HOME deployment
+    # (TLS_MODE=local) uses the same image but serves the mkcert certificate
+    # instead; the extra module is simply unused there.
+    build:
+      context: .
+      dockerfile: caddy.Dockerfile
+    image: ticketproject-caddy:latest
     container_name: ticketproject-caddy
     restart: unless-stopped
     environment:
       SITE_HOST: ${SITE_HOST:?SITE_HOST must be set in .env}
+      # Selects the certificate source in the Caddyfile:
+      #   local  -> mkcert cert from ./certs (home / LAN)
+      #   public -> Let's Encrypt via the Cloudflare DNS-01 challenge (public)
+      # Defaults to local so a plain `docker compose up` stays on the LAN path.
+      TLS_MODE: ${TLS_MODE:-local}
+      # Let's Encrypt contact address (used when TLS_MODE=public). Optional but
+      # recommended so you receive certificate expiry/revocation notices.
+      ACME_EMAIL: ${ACME_EMAIL:-}
+      # Scoped Cloudflare API token (Zone.Zone:Read + Zone.DNS:Edit), read at
+      # runtime by Caddy's cloudflare DNS provider (used when TLS_MODE=public).
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
     ports:
+      # 80 is published so Caddy can redirect HTTP -> HTTPS. The DNS-01
+      # challenge does NOT require inbound 80 from the internet, so on a public
+      # server the EC2 security group can restrict inbound to 22/443.
       - "80:80"
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Deployment-specific `tls` snippets (caddy/local.caddy, caddy/public.caddy)
+      # imported by the Caddyfile based on TLS_MODE.
+      - ./caddy:/etc/caddy/snippets:ro
+      # mkcert cert/key, only used when TLS_MODE=local (harmless otherwise).
       - ./certs:/etc/caddy/certs:ro
+      # Persist the ACME account and the issued/renewed Let's Encrypt
+      # certificate so restarts do not re-issue (and hit rate limits). Deleting
+      # caddy_data discards the certificate.
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       - frontend
       - backend
@@ -124,6 +155,8 @@ services:
 
 volumes:
   mariadb_data:
+  caddy_data:
+  caddy_config:
 
 networks:
   ticketnet:

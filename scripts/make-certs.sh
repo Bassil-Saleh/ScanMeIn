@@ -25,6 +25,21 @@ if [ -z "$SITE_HOST" ]; then
     exit 1
 fi
 
+# A public deployment (TLS_MODE=public) obtains a real Let's Encrypt certificate
+# via Caddy's Cloudflare DNS-01 challenge, so the mkcert LAN certificate is not
+# used and does not need to be generated. Read TLS_MODE from .env (default local).
+TLS_MODE="local"
+if [ -f .env ]; then
+    TLS_MODE="$(grep -E '^TLS_MODE=' .env | tail -n 1 | cut -d '=' -f 2- || true)"
+fi
+[ -n "$TLS_MODE" ] || TLS_MODE="local"
+if [ "$TLS_MODE" = "public" ]; then
+    echo "TLS_MODE=public: skipping mkcert certificate generation."
+    echo "Caddy will obtain a Let's Encrypt certificate for ${SITE_HOST} via the"
+    echo "Cloudflare DNS-01 challenge (see caddy/public.caddy and the README)."
+    exit 0
+fi
+
 if ! command -v mkcert >/dev/null 2>&1; then
     echo "ERROR: mkcert is not installed." >&2
     echo "Install it first, e.g.:" >&2
