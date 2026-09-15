@@ -141,12 +141,46 @@ services:
       # Scoped Cloudflare API token (Zone.Zone:Read + Zone.DNS:Edit), read at
       # runtime by Caddy's cloudflare DNS provider (used when TLS_MODE=public).
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      # --- Cloudflare Access: origin-side validation ------------------------
+      # When CF_ACCESS_MODE=on, Caddy additionally requires every request to
+      # carry a Cloudflare Access JWT (the signed `Cf-Access-Jwt-Assertion`
+      # header, falling back to the CF_Authorization cookie) issued by your Zero
+      # Trust team for this application; anything else gets a 401. That is the
+      # origin's proof that the request really passed through Cloudflare Access
+      # instead of arriving straight at the origin, so knowing the public IP is
+      # no longer enough to reach the site without being on the email allowlist.
+      #   off (default) -> do not validate (home/LAN, or Access deliberately
+      #                    switched off when the site opens to the public).
+      #   on            -> validate; requires the two variables below.
+      # It is intentionally independent of TLS_MODE, so enabling or disabling
+      # Access never changes how the certificate is obtained.
+      CF_ACCESS_MODE: ${CF_ACCESS_MODE:-off}
+      # Zero Trust team domain WITHOUT the scheme, e.g. scanmein.cloudflareaccess.com
+      # (the Access JWT issuer and the JWKS host: https://<team>/cdn-cgi/access/certs).
+      CF_ACCESS_TEAM_DOMAIN: ${CF_ACCESS_TEAM_DOMAIN:-}
+      # Application Audience (AUD) tag of the Access application, from
+      # Access -> Applications -> <your app> -> Overview.
+      CF_ACCESS_AUD: ${CF_ACCESS_AUD:-}
     ports:
       # 80 is published so Caddy can redirect HTTP -> HTTPS. The DNS-01
-      # challenge does NOT require inbound 80 from the internet, so on a public
-      # server the EC2 security group can restrict inbound to 22/443.
-      - "80:80"
-      - "443:443"
+      # challenge does NOT require inbound 80 from the internet.
+      #
+      # CADDY_BIND_ADDR chooses WHICH interface these ports are published on:
+      #   0.0.0.0   (default) -> reachable from the network; correct for the
+      #                          home/LAN deployment, where devices connect
+      #                          straight to Caddy.
+      #   127.0.0.1           -> reachable from the host only. Use this on a
+      #                          public server fronted by a Cloudflare Tunnel:
+      #                          cloudflared reaches Caddy over the internal
+      #                          Docker network and needs no published port, so
+      #                          there is no inbound path to the origin at all
+      #                          (and the EC2 security group needs no 80/443
+      #                          rule). You can still debug the site from the
+      #                          host itself, or remotely with
+      #                          `ssh -L 8443:127.0.0.1:443 <host>`.
+      # scripts/init-secrets.sh sets this automatically for a public deployment.
+      - "${CADDY_BIND_ADDR:-0.0.0.0}:80:80"
+      - "${CADDY_BIND_ADDR:-0.0.0.0}:443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Deployment-specific `tls` snippets (caddy/local.caddy, caddy/public.caddy)
