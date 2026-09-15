@@ -77,7 +77,7 @@ clean: ## Stop the stack AND delete the MariaDB data volume.
 # the TLS certs. Because both .env (secrets) and mariadb_data (encrypted rows)
 # are deleted together, rotating the keys never orphans existing data.
 distclean: ## Full reset: remove the stack, its volumes, built images, build cache, plus .env and certs/.
-	docker compose --profile local down -v --remove-orphans
+	docker compose $(ALL_PROFILES) down -v --remove-orphans
 	-docker rmi -f ticketproject-caddy:latest
 	docker image prune -f
 	docker builder prune -f

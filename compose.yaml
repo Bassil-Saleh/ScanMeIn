@@ -183,8 +183,11 @@ services:
       - "${CADDY_BIND_ADDR:-0.0.0.0}:443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      # Deployment-specific `tls` snippets (caddy/local.caddy, caddy/public.caddy)
-      # imported by the Caddyfile based on TLS_MODE.
+      # Deployment-specific snippets imported by the Caddyfile:
+      #   caddy/local.caddy / caddy/public.caddy -> the `tls` directive,
+      #     selected by TLS_MODE.
+      #   caddy/access-off.caddy / caddy/access-on.caddy -> Cloudflare Access
+      #     JWT validation at the origin, selected by CF_ACCESS_MODE.
       - ./caddy:/etc/caddy/snippets:ro
       # mkcert cert/key, only used when TLS_MODE=local (harmless otherwise).
       - ./certs:/etc/caddy/certs:ro
@@ -196,6 +199,42 @@ services:
     depends_on:
       - frontend
       - backend
+    networks:
+      - ticketnet
+
+  cloudflared:
+    # Cloudflare Tunnel connector: the ONLY public ingress of a public
+    # deployment (started by `make up-aws`, which activates the "tunnel"
+    # profile). cloudflared dials OUT to Cloudflare's edge and keeps the tunnel
+    # open, which means:
+    #   * the host publishes no inbound 80/443 and the EC2 security group needs
+    #     no rule for them (see CADDY_BIND_ADDR on the caddy service above),
+    #   * the origin cannot be reached by its raw IP address, so Cloudflare
+    #     Access cannot be bypassed by somebody who discovers that address, and
+    #   * the hostname is a proxied CNAME to the tunnel rather than an A record,
+    #     so the public IP need not be published in DNS at all.
+    #
+    # Every setting (the tunnel credentials and the public hostname -> service
+    # mapping) lives in the TUNNEL_TOKEN created in the Zero Trust dashboard, so
+    # no config.yml is mounted and nothing is baked into the image. In the
+    # dashboard, point the public hostname at `https://caddy:443` and set the
+    # Origin Server Name / HTTP Host Header to SITE_HOST: Caddy serves a real
+    # Let's Encrypt certificate for that hostname, so this hop is verified end to
+    # end instead of being skipped.
+    profiles: ["tunnel"]
+    # Version pinned (like mariadb and mailpit above) so rebuilds are
+    # reproducible; --no-autoupdate keeps the connector on exactly this version.
+    image: cloudflare/cloudflared:2026.9.1
+    container_name: ticketproject-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      # Read from .env; compose fails fast when it is missing. It is passed as an
+      # environment variable rather than on the command line so the credential
+      # never appears in process listings or `docker inspect` output.
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?TUNNEL_TOKEN must be set in .env for a tunnel deployment}
+    depends_on:
+      - caddy
     networks:
       - ticketnet
 
