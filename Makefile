@@ -54,9 +54,22 @@ up: ## Start the full stack in the background (home network, includes Mailpit).
 #                          reached by its raw IP address. Cloudflare Access
 #                          authenticates users at the edge, and Caddy re-validates
 #                          the Access JWT at the origin (CF_ACCESS_MODE=on).
-# Requires TUNNEL_TOKEN, SITE_HOST, ACME_EMAIL, CLOUDFLARE_API_TOKEN and
-# CF_ACCESS_* to be set in .env (see scripts/init-secrets.sh and the README).
+# The preflight checks below exist because compose.yaml cannot enforce them
+# itself: it must interpolate TUNNEL_TOKEN with an empty default, otherwise every
+# other target (including the home-network `make up`/`make down`) would fail on a
+# machine that has no tunnel token, since Compose interpolates all services
+# before applying profiles.
+define check_aws_env
+	@test -f .env || { echo "ERROR: no .env file. Run 'make bootstrap' first (on a public server, e.g.:"; echo "  ./scripts/init-secrets.sh --site-host <your-fqdn> --tls-mode public ...)"; exit 1; }
+	@grep -Eq '^TUNNEL_TOKEN=.+' .env || { echo "ERROR: TUNNEL_TOKEN is missing or empty in .env."; echo "Create a tunnel in the Cloudflare Zero Trust dashboard (Networks -> Tunnels ->"; echo "Create a tunnel), add a public hostname pointing at https://caddy:443, and paste"; echo "the connector token into .env. See the README."; exit 1; }
+	@if grep -Eq '^CF_ACCESS_MODE=on' .env; then \
+		grep -Eq '^CF_ACCESS_TEAM_DOMAIN=.+' .env || { echo "ERROR: CF_ACCESS_MODE=on but CF_ACCESS_TEAM_DOMAIN is missing or empty in .env"; echo "(the Zero Trust team domain, without the scheme, e.g. scanmein.cloudflareaccess.com)."; exit 1; }; \
+		grep -Eq '^CF_ACCESS_AUD=.+' .env || { echo "ERROR: CF_ACCESS_MODE=on but CF_ACCESS_AUD is missing or empty in .env"; echo "(the Application Audience tag of your Access application)."; exit 1; }; \
+	fi
+endef
+
 up-aws: ## Start the stack for a public server (EC2): Let's Encrypt cert, Cloudflare Tunnel + Access, no Mailpit, email via Amazon SES.
+	$(check_aws_env)
 	TLS_MODE=public docker compose --profile tunnel up -d
 
 down: ## Stop and remove the stack (data volume preserved).

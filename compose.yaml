@@ -229,10 +229,17 @@ services:
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
-      # Read from .env; compose fails fast when it is missing. It is passed as an
-      # environment variable rather than on the command line so the credential
-      # never appears in process listings or `docker inspect` output.
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?TUNNEL_TOKEN must be set in .env for a tunnel deployment}
+      # Passed as an environment variable rather than on the command line so the
+      # credential never appears in process listings or `docker inspect` output.
+      #
+      # NOTE: this deliberately uses `:-` (empty default) and NOT `:?`. Compose
+      # interpolates every service in the file BEFORE it applies profiles, so a
+      # `:?` here would make unrelated commands fail too - `make up`, `make down`,
+      # `make logs` and `make status` would all abort on a home-network machine
+      # that has no tunnel token. Instead `make up-aws` verifies that .env really
+      # contains a non-empty TUNNEL_TOKEN (and a consistent CF_ACCESS_* trio)
+      # before it starts anything, and refuses to run otherwise.
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     depends_on:
       - caddy
     networks:
