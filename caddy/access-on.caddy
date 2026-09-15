@@ -1,0 +1,55 @@
+# Caddy snippet that enforces Cloudflare Access at the ORIGIN (CF_ACCESS_MODE=on).
+# Imported by ../Caddyfile inside the site block, where it contributes the
+# `jwtauth` directive (module compiled into this image by ../caddy.Dockerfile).
+#
+# WHY THIS EXISTS
+# Cloudflare Access authenticates and allowlists visitors at Cloudflare's edge.
+# On its own that only protects requests that actually arrive *through*
+# Cloudflare: anything reaching the origin by another route (a discovered public
+# IP, a port left open in the security group, a second tunnel, another container
+# on the same host) would skip the Access login entirely. This snippet closes that
+# gap by making the origin demand proof that the request came through Access.
+# With this stack's Cloudflare Tunnel ingress (see the `cloudflared` service in
+# compose.yaml) there is no inbound port at all, so this check is a second,
+# independent lock rather than the first line of defense.
+#
+# HOW IT WORKS
+# After a successful Access login, Cloudflare attaches a JWT signed with the
+# team's private key to every request it forwards:
+#   * the `Cf-Access-Jwt-Assertion` header (present on XHR/API calls too), and
+#   * the `CF_Authorization` cookie (fallback for plain browser navigation).
+# `jwtauth` verifies that token before the request is routed to any handler:
+#   * signature - against the team's public keys, published as a standard JWKS at
+#                 https://<team domain>/cdn-cgi/access/certs (fetched, cached and
+#                 refreshed automatically by the module),
+#   * issuer    - must be https://<team domain>,
+#   * audience  - must be this application's AUD tag,
+#   * lifetime  - exp/iat/nbf, with a small clock-skew tolerance.
+# Anything that fails produces a 401 and never reaches the backend or frontend.
+# The signing algorithm is deliberately not pinned: the module takes it from the
+# matched JWK, so a future Cloudflare key rotation cannot break the site.
+#
+# WHY THE APP'S OWN JWTs DO NOT COLLIDE
+# The frontend also sends its own `Authorization: Bearer <app JWT>` to /api. The
+# module treats every token it finds (query, the configured header, cookies, then
+# Authorization) as a *candidate* and authenticates as soon as one verifies
+# against the Access JWKS; an application token simply fails that check and is
+# skipped, so a logged-in user with a valid Access session is never blocked.
+#
+# REQUIRED .env VALUES (written by scripts/init-secrets.sh):
+#   CF_ACCESS_MODE=on
+#   CF_ACCESS_TEAM_DOMAIN=<team>.cloudflareaccess.com   (no scheme, no slash)
+#   CF_ACCESS_AUD=<Application Audience tag of the Access application>
+jwtauth {
+    jwk_url https://{$CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs
+    from_header Cf-Access-Jwt-Assertion
+    from_cookies CF_Authorization
+    issuer_whitelist https://{$CF_ACCESS_TEAM_DOMAIN}
+    audience_whitelist {$CF_ACCESS_AUD}
+    # Identifies the caller in Caddy's access log: the email claim for a human
+    # login, common_name/sub for a service token (which carries no email).
+    user_claims email common_name sub
+    # Tolerate a few seconds of clock drift between Cloudflare and the origin.
+    clock_skew 10
+    log_level INFO
+}

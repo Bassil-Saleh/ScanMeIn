@@ -1,0 +1,15 @@
+# Caddy snippet for deployments WITHOUT origin-side Cloudflare Access validation
+# (CF_ACCESS_MODE=off, the default). Imported by ../Caddyfile inside the site
+# block, where it contributes no directives at all.
+#
+# Use this mode when:
+#   * the stack runs on a home/LAN network, where there is no Cloudflare Access
+#     application in front of it - requiring an Access JWT there would lock
+#     everybody (including you) out of the site, or
+#   * the site is opened to the general public and the Access application is
+#     switched off. Because this is a separate switch from TLS_MODE, going public
+#     needs no certificate, DNS or image change: set CF_ACCESS_MODE=off in .env
+#     and restart Caddy.
+#
+# This file intentionally contains only comments: Caddy imports it and finds no
+# tokens to add to the site block, so the request handling is unchanged.
