@@ -25,6 +25,22 @@ if [ -z "$SITE_HOST" ]; then
     exit 1
 fi
 
+# A cloud instance's INTERNAL hostname (e.g.
+# ip-172-31-8-42.us-east-2.compute.internal) is not something mkcert should be
+# asked for a certificate for, and it is never what visitors type into a browser.
+# scripts/init-secrets.sh refuses to write such a value; this is the same guard
+# for a .env that was edited by hand.
+case "$SITE_HOST" in
+    ip-[0-9]*|*.internal|*.localdomain|*.*.amazonaws.com)
+        echo "ERROR: SITE_HOST='$SITE_HOST' looks like this machine's INTERNAL name." >&2
+        echo "Use the address visitors actually reach the site at instead:" >&2
+        echo "  home/LAN: sudo hostnamectl set-hostname ticketproject.local, then" >&2
+        echo "            delete .env and re-run scripts/init-secrets.sh" >&2
+        echo "  public:   ./scripts/init-secrets.sh --site-host <your-fqdn> --tls-mode public" >&2
+        exit 1
+        ;;
+esac
+
 # A public deployment (TLS_MODE=public) obtains a real Let's Encrypt certificate
 # via Caddy's Cloudflare DNS-01 challenge, so the mkcert LAN certificate is not
 # used and does not need to be generated. Read TLS_MODE from .env (default local).
