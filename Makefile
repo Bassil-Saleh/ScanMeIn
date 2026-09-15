@@ -1,22 +1,26 @@
 # Makefile for the Ticket Project Docker deployment (home network and public
-# server). The deployment type is selected by the target, which sets TLS_MODE:
-#   make up       -> TLS_MODE=local  (home/LAN, mkcert certificate, + Mailpit)
-#   make up-aws   -> TLS_MODE=public (public server, Let's Encrypt via the
-#                    Cloudflare DNS-01 challenge, no Mailpit, email via SES)
+# server). The deployment type is selected by the target, which sets TLS_MODE
+# and the Docker Compose profiles:
+#   make up       -> TLS_MODE=local,  --profile local  (home/LAN: mkcert
+#                    certificate + Mailpit, no Cloudflare Tunnel)
+#   make up-aws   -> TLS_MODE=public, --profile tunnel (public server, e.g. EC2:
+#                    Let's Encrypt via the Cloudflare DNS-01 challenge, ingress
+#                    through a Cloudflare Tunnel, no Mailpit, email via SES)
 #
 # Common targets:
 #   make bootstrap  Generate .env secrets and TLS certs (first time only).
 #   make build      Build the backend, frontend, and custom Caddy Docker images.
 #   make up         Start the full stack in the background (home network).
-#   make up-aws     Start the stack for a public server (EC2, Let's Encrypt).
+#   make up-aws     Start the stack for a public server (EC2 + Cloudflare Access).
 #   make down       Stop and remove the stack (data volume is preserved).
-#                   Teardown always activates the "local" profile so the Mailpit
-#                   container is removed too; otherwise it stays attached to the
-#                   ticketnet network and Docker refuses to delete that network
-#                   ("Network ticket_project_ticketnet Resource is still in use").
-#   make logs       Tail logs from all services (also activates the "local"
-#                   profile, otherwise Mailpit's logs are skipped entirely).
-#   make status     Show the status of all services.
+#                   Teardown always activates BOTH the "local" and the "tunnel"
+#                   profile so the Mailpit and cloudflared containers are removed
+#                   too; otherwise they stay attached to the ticketnet network and
+#                   Docker refuses to delete that network ("Network
+#                   ticket_project_ticketnet Resource is still in use").
+#   make logs       Tail logs from all services (also activates both profiles,
+#                   otherwise Mailpit's and cloudflared's logs are skipped).
+#   make status     Show the status of all services (both profiles activated).
 
 .PHONY: bootstrap build up up-aws down logs status clean distclean help
 
