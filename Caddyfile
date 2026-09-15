@@ -17,11 +17,42 @@
 # the caddy container in compose.yaml. compose.yaml fails fast if SITE_HOST is
 # missing or empty in .env.
 
+# --- Global options ----------------------------------------------------------
+{
+    # Tell Caddy where the `jwtauth` directive (provided by the caddy-jwt module
+    # compiled into this image, see caddy.Dockerfile) belongs in the handler
+    # chain. Authentication must run BEFORE the routing directives
+    # (`handle`/`route`) below, otherwise a request would already have been
+    # proxied to the backend by the time it is checked. Caddy's standard order
+    # puts `basicauth` there, so parking `jwtauth` immediately before it is
+    # enough. This option is required for the config to adapt at all, so it is
+    # present unconditionally - it costs nothing when CF_ACCESS_MODE=off, because
+    # no `jwtauth` directive is then imported.
+    order jwtauth before basicauth
+}
+
 {$SITE_HOST} {
     # Pull in the deployment-appropriate `tls` directive (mkcert or Let's
     # Encrypt). Caddy substitutes {$TLS_MODE} before parsing, so the imported
     # file name is /etc/caddy/snippets/local.caddy or .../public.caddy.
     import /etc/caddy/snippets/{$TLS_MODE:local}.caddy
+
+    # Pull in the Cloudflare Access origin check, selected by CF_ACCESS_MODE in
+    # exactly the same way:
+    #   off (default) -> /etc/caddy/snippets/access-off.caddy (comments only)
+    #   on            -> /etc/caddy/snippets/access-on.caddy  (jwtauth)
+    # This is a separate switch from TLS_MODE on purpose: when the site is ready
+    # for the general public you set CF_ACCESS_MODE=off and nothing about the
+    # certificate or DNS has to change.
+    import /etc/caddy/snippets/access-{$CF_ACCESS_MODE:off}.caddy
+
+    # Defense in depth. Cloudflare also forwards UNSIGNED identity headers (e.g.
+    # Cf-Access-Authenticated-User-Email) next to the signed JWT. Anything that
+    # reaches this origin without passing through Cloudflare could set those
+    # freely, so they are not trustworthy and are dropped before proxying; the
+    # signed Access JWT verified by the snippet above is the only identity signal
+    # this stack relies on.
+    request_header -Cf-Access-Authenticated-User-Email
 
     # REST API -> Spring Boot backend.
     handle /api/* {
