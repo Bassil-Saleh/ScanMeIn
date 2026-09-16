@@ -357,6 +357,15 @@ Unsigned headers such as `Cf-Access-Authenticated-User-Email` are deleted by the
 `Caddyfile` before anything is proxied: only the signed JWT counts as proof of
 identity.
 
+> **Troubleshooting.** This check is deliberately fail-closed: if Caddy cannot
+> reach `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`, or if
+> `CF_ACCESS_AUD` does not match the application that issued the token, every
+> request gets a `401` (and Caddy may refuse to start at all). `docker compose
+> logs caddy` says why - look for `invalid token`, `invalid audience` or a JWKS
+> fetch error. While debugging you can take the check out of the path with
+> `CF_ACCESS_MODE=off` in `.env` followed by `make up-aws`; layers 1-3 still
+> apply, but do not leave it off on a public deployment.
+
 **Opening the site to the public later** takes two steps and no downtime: widen
 or disable the Access policy in the dashboard, set `CF_ACCESS_MODE=off` in
 `.env`, and run `make up-aws`. Because the certificate is obtained via DNS-01 and
