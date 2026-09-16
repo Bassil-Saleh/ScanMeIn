@@ -13,6 +13,18 @@
 # The matching snippet is imported below and defaults to "local" when TLS_MODE
 # is unset (e.g. a plain `docker compose up`).
 #
+# Whether a request must ALSO carry a valid Cloudflare Access JWT is selected
+# independently by the CF_ACCESS_MODE environment variable:
+#   * CF_ACCESS_MODE=off (default) -> no origin-side Access check
+#     (caddy/access-off.caddy): a home/LAN deployment, or a site that has been
+#     opened to the general public.
+#   * CF_ACCESS_MODE=on            -> every request must present an Access JWT
+#     signed by your Zero Trust team for this application
+#     (caddy/access-on.caddy). That is what stops a request which did not come
+#     through Cloudflare Access from being served at all.
+# Keeping the two switches separate is deliberate: Access can be turned off later
+# without changing anything about TLS or DNS.
+#
 # {$SITE_HOST} is substituted from the SITE_HOST environment variable passed to
 # the caddy container in compose.yaml. compose.yaml fails fast if SITE_HOST is
 # missing or empty in .env.

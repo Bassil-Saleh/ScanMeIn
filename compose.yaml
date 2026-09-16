@@ -117,11 +117,15 @@ services:
       - ticketnet
 
   caddy:
-    # Custom image (see caddy.Dockerfile) with the Cloudflare DNS provider
-    # module compiled in, so the PUBLIC deployment (TLS_MODE=public) can obtain
-    # a Let's Encrypt certificate via the DNS-01 challenge. The HOME deployment
-    # (TLS_MODE=local) uses the same image but serves the mkcert certificate
-    # instead; the extra module is simply unused there.
+    # Custom image (see caddy.Dockerfile) with two extra modules compiled in:
+    #   * the Cloudflare DNS provider, so the PUBLIC deployment (TLS_MODE=public)
+    #     can obtain a Let's Encrypt certificate via the DNS-01 challenge, and
+    #   * caddy-jwt, so the origin can verify Cloudflare Access JWTs
+    #     (CF_ACCESS_MODE=on) and refuse anything that did not come through
+    #     Access.
+    # The HOME deployment (TLS_MODE=local, CF_ACCESS_MODE=off) uses the same image
+    # but exercises neither module: it serves the mkcert certificate and performs
+    # no JWT check.
     build:
       context: .
       dockerfile: caddy.Dockerfile
