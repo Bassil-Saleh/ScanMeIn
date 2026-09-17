@@ -175,11 +175,11 @@ does for you when it detects it is running on EC2).
 ### Provisioning the EC2 instance
 
 1. **Launch the instance.** Ubuntu Server 24.04 LTS, `t3.small` (2 GB) -
-   a 1 GB instance works but needs the swap file from step 5, since `make build`
-   runs Maven + the JDK and npm + `tsc` + Vite. Give it 20-30 GB of gp3 storage
-   (Docker images + the MariaDB volume). If you choose an ARM instance
-   (`t4g.*`), everything still works; just build the images on an ARM host or
-   with `docker buildx --platform linux/arm64`.
+   a 1 GB instance works but needs a swap file (see the note under *Build and
+   start*), since `make build` runs Maven + the JDK and npm + `tsc` + Vite. Give
+   it 20-30 GB of gp3 storage (Docker images + the MariaDB volume). If you
+   choose an ARM instance (`t4g.*`), everything still works; just build the
+   images on an ARM host or with `docker buildx --platform linux/arm64`.
 2. **Key pair.** Create a new ed25519 key pair and download the `.pem`
    (`chmod 400` it locally).
 3. **Security group.** Inbound: **`22/tcp` from your current public IP only**
@@ -192,20 +192,15 @@ does for you when it detects it is running on EC2).
    encryption on. Optional but recommended: an instance role with
    `AmazonSSMManagedInstanceCore`, so you always have a fallback shell (Session
    Manager) if your home IP changes and the `22/tcp` rule no longer matches.
-5. **First login, then harden SSH.** Connect as the stock `ubuntu` user and run
-   the hardening script from the repository (clone it first, or copy the single
-   file over). It creates your own admin user, installs your public key, disables
-   root/password/keyboard-interactive login, restricts SSH to that one user,
-   validates the config with `sshd -t` *before* applying it, and reloads sshd
-   without dropping your session:
-   ```
-   git clone <your-repo-url> Ticket_Project && cd Ticket_Project
-   sudo ./scripts/ec2/harden-ssh.sh --user <yourname> --with-swap 2G
-   ```
-   Add `--with-fail2ban` if you want brute-force attempts banned. **Keep that
-   session open and verify login from a second terminal before closing it** -
-   the script prints the exact revert command. Reconnect as your new user
-   afterwards, and install Docker:
+5. **First login, then secure the instance.** Connect as the stock `ubuntu` user.
+   Cloud images differ in how sshd and their firewall are configured, so harden
+   the instance yourself - your provider's documentation is the authority here,
+   not a script in this repository. At a minimum: key-only logins (no password,
+   no keyboard-interactive), no root login, and SSH reachable from your own IP
+   only; consider fail2ban and automatic security updates too. **Keep this
+   session open and confirm that a login from a second terminal works before you
+   close it** - a mistake here can lock you out of the instance. Then install
+   Docker:
    ```
    curl -fsSL https://get.docker.com -o install-docker.sh
    cat install-docker.sh          # verify what it does
@@ -451,9 +446,20 @@ running containers - with `ticketproject-cloudflared` present and
 `ticketproject-mailpit` absent.
 
 > On a 1 GB instance `make build` can be killed by the OOM reaper, because it
-> runs Maven + the JDK and npm + `tsc` + Vite. Add a swap file first
-> (`sudo ./scripts/ec2/harden-ssh.sh --with-swap 2G` does it), or build the images
-> on a bigger machine and bring them over with `docker save` / `docker load`.
+> runs Maven + the JDK and npm + `tsc` + Vite. Add a swap file first, or build
+> the images on a bigger machine and bring them over with `docker save` /
+> `docker load`.
+
+Before the first `make build` on a small instance (skip this if `swapon --show`
+already lists swap), create one:
+
+```
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
 
 ### Verifying the lockdown
 
@@ -466,7 +472,7 @@ curl -sI https://scanmein.online | head -1     # 302 -> <team>.cloudflareaccess.
 # 2. The raw IP address leads nowhere (no inbound 80/443 exists at all):
 curl -sS -m 5 -k https://<instance-ip>/        # timed out / connection refused
 
-# 3. SSH accepts only your admin user, from your IP only:
+# 3. SSH refuses everything but a public key (use whichever user you hardened):
 ssh -o BatchMode=yes ubuntu@<instance-ip>      # Permission denied (publickey)
 ```
 
