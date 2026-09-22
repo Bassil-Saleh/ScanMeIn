@@ -1,5 +1,5 @@
 # =============================================================================
-# Multi-stage build for the Ticket Project React frontend.
+# Multi-stage build for the ScanMeIn React frontend.
 #
 # Stage 1 (build): uses Node 24 to install dependencies (npm ci) and build
 #                  the static production bundle with Vite.

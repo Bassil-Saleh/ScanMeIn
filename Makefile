@@ -1,4 +1,4 @@
-# Makefile for the Ticket Project Docker deployment (home network and public
+# Makefile for the ScanMeIn Docker deployment (home network and public
 # server). The deployment type is selected by the target, which sets TLS_MODE
 # and the Docker Compose profiles:
 #   make up       -> TLS_MODE=local,  --profile local  (home/LAN: mkcert

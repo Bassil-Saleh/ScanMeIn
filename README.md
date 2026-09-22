@@ -1,4 +1,4 @@
-# Ticket Project
+# ScanMeIn
 
 ## Project Demo:
 

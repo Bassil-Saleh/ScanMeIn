@@ -1,5 +1,5 @@
 # =============================================================================
-# Docker Compose stack for running the Ticket Project on a dedicated machine on
+# Docker Compose stack for running ScanMeIn on a dedicated machine on
 # your home network (e.g. a server reachable over Wi-Fi) or on a public server
 # (e.g. an AWS EC2 instance fronted by Cloudflare).
 #

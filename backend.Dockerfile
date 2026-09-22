@@ -1,5 +1,5 @@
 # =============================================================================
-# Multi-stage build for the Ticket Project Spring Boot backend (Java 25).
+# Multi-stage build for the ScanMeIn Spring Boot backend (Java 25).
 #
 # Stage 1 (build): uses the Temurin 25 JDK and the project's Maven wrapper to
 #                  compile and package the application, skipping tests.

@@ -1,4 +1,4 @@
-# Caddyfile for the Ticket Project Docker deployment (home network AND public
+# Caddyfile for the ScanMeIn Docker deployment (home network AND public
 # server). Caddy terminates HTTPS and routes traffic to the frontend and backend
 # services on the internal Docker network. Caddy automatically redirects HTTP
 # (port 80) to HTTPS (port 443).
