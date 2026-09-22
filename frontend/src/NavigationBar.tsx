@@ -32,7 +32,7 @@ export function NavigationBar() {
         <nav className="navbar">
             <Link to="/" className="navbar__brand">
                 <span className="navbar__brand-icon" aria-hidden="true">🎟️</span>
-                TicketProject
+                ScanMeIn.online
             </Link>
             <div className="navbar__links">
                 {isLoggedIn ? (

@@ -6,7 +6,7 @@
 export function Footer() {
     return (
         <footer className="footer">
-            <p>&copy; 2026 TicketProject. All rights reserved.</p>
+            <p>&copy; 2026 ScanMeIn.online. All rights reserved.</p>
         </footer>
     );
 }

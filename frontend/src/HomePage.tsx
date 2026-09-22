@@ -68,16 +68,16 @@ export function HomePage() {
                         or receive an invitation is a working email address.
                         Once they receive their tickets, they are free to
                         present them on any device of their choice or even
-                        print out their tickets. No TicketProject account
+                        print out their tickets. No ScanMeIn.online account
                         or special smartphone app is required to attend an
-                        event hosted on TicketProject.
+                        event hosted on ScanMeIn.online.
                     </p>
                 </div>
                 <div className="feature-card">
                     <div className="feature-card__icon" aria-hidden="true">📊</div>
                     <h2 className="feature-card__title">Track And Manage Attendance</h2>
                     <p className="feature-card__text">
-                        Event hosts scan in attendees using the TicketProject
+                        Event hosts scan in attendees using the ScanMeIn.online
                         app for Android. Event hosts can also view attendance
                         statistics for each of their events, and manage
                         invitations and registrations.

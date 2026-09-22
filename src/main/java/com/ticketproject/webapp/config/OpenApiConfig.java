@@ -37,10 +37,10 @@ public class OpenApiConfig
             .info
             (
                 new Info()
-                    .title("TicketProject API")
+                    .title("ScanMeIn API")
                     .description
                     (
-                        "REST API for TicketProject, an event ticketing platform. " +
+                        "REST API for ScanMeIn.online, an event ticketing platform. " +
                         "Event hosts can create and manage events, attendees can register " +
                         "for public events, and tickets can be scanned at event entry. " +
                         "Routes marked with the lock icon require an " +
