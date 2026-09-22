@@ -449,15 +449,28 @@ h1, h2, h3, h4, h5, h6 {
     border-color: var(--color-accent-hover);
 }
 
-.navbar__btn--logout {
+/* The Dashboard link and the Log Out button share the same styling so the
+   two actions look consistent in the navigation bar. */
+.navbar__btn--logout,
+.navbar__btn--dashboard {
     background-color: transparent;
     color: rgba(255, 255, 255, 0.85);
     border-color: rgba(255, 255, 255, 0.4);
 }
 
-.navbar__btn--logout:hover {
+/* The Dashboard action is rendered as an <a>, so it needs the display,
+   line-height, and text-decoration reset that a <button> gets for free. */
+.navbar__btn--dashboard {
+    display: inline-block;
+    line-height: normal;
+    text-decoration: none;
+}
+
+.navbar__btn--logout:hover,
+.navbar__btn--dashboard:hover {
     background-color: rgba(255, 255, 255, 0.12);
     color: var(--color-white);
+    text-decoration: none;
 }
 
 /* --------------------------------------------------------------------------
@@ -795,6 +808,14 @@ h1, h2, h3, h4, h5, h6 {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--space-md);
+}
+
+/* Grid items default to a minimum width of `auto`, which stops the columns
+   from shrinking below their content's intrinsic width. Letting them shrink
+   keeps a wide control (e.g. a datetime-local input) from overflowing the
+   page on small screens. */
+.form-row > * {
+    min-width: 0;
 }
 
 .form-section-title {
@@ -1240,6 +1261,20 @@ textarea.form-input {
 
     .dashboard__event-actions {
         align-self: flex-start;
+    }
+
+    /* The Actions button is left-aligned at this width, so anchor the menu to
+       its left edge. A right-anchored menu would extend past the left edge of
+       the viewport and get cut off. */
+    .dashboard__event-menu {
+        left: 0;
+        right: auto;
+    }
+
+    /* Stack paired fields (e.g. the Start/End date inputs on the Edit Event
+       page) so they fit the viewport width instead of overflowing it. */
+    .profile__edit-form--column .form-row {
+        grid-template-columns: 1fr;
     }
 
     .profile__edit-form {

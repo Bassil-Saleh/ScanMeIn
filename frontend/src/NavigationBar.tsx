@@ -37,7 +37,7 @@ export function NavigationBar() {
             <div className="navbar__links">
                 {isLoggedIn ? (
                     <>
-                        <Link to="/dashboard" className="navbar__link">Dashboard</Link>
+                        <Link to="/dashboard" className="navbar__btn navbar__btn--dashboard">Dashboard</Link>
                         <button
                             className="navbar__btn navbar__btn--logout"
                             onClick={handleLogout}
