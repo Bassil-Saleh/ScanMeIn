@@ -431,6 +431,15 @@ make build       # backend, frontend, and the custom Caddy image (Cloudflare DNS
 make up-aws      # TLS_MODE=public, tunnel profile, no Mailpit, email via Amazon SES
 ```
 
+> `make build` only builds images; it does not restart the stack. Until the
+> stack is recreated the old containers keep serving the old build, so run the
+> two targets back to back (`make build && make up-aws` here, `make build &&
+> make up` on the home-network deployment). A browser that reaches the site
+> during that gap can cache an `index.html` that names bundle files the new
+> image no longer has, which shows up as a blank page that a rebuild alone will
+> not clear - see **Troubleshooting: If the page is blank after a rebuild
+> (cached assets)** below.
+
 Then watch the certificate and the tunnel come up:
 
 ```
@@ -488,6 +497,59 @@ docker compose logs caddy | tail -5            # "invalid token" / no JWT found
 
 After you log in through Access in a browser, the same request carries the
 `Cf-Access-Jwt-Assertion` header that Cloudflare signed and succeeds.
+
+## Troubleshooting: If the page is blank after a rebuild (cached assets)
+
+**Symptom.** The site loads through Cloudflare Access (the certificate is fine
+and `make status` shows five running containers), but the page stays blank and
+the browser console reports:
+
+```
+Loading module from “https://scanmein.online/assets/index-<hash>.js” was blocked
+because of a disallowed MIME type (“text/html”).
+```
+
+Errors about `static.cloudflareinsights.com/beacon.min.js` (a CORS failure or a
+`sha512` integrity mismatch) come from Cloudflare Web Analytics and are not the
+cause.
+
+**Cause.** Vite names each built file after a hash of its contents, and
+`frontend/nginx.conf` falls back to `index.html` for unknown paths so that
+client-side routes resolve (`try_files $uri $uri/ /index.html`). If a hashed
+asset is requested while it is not present in the frontend container - the
+browser still holds a pre-rebuild `index.html`, or the request arrives while the
+stack is being recreated - nginx answers with the SPA shell, i.e. a `200`
+`text/html` response for a `.js` URL. Being a cacheable success, that response
+gets stored *under the asset URL*: Cloudflare applies its 4-hour default TTL to
+`.js` and `.css` because the origin sends no `Cache-Control`, and the browser
+caches it as well. The module can then never execute, and because a redeploy that
+does not change the frontend source produces the *same* hashed filenames,
+rebuilding does not help.
+
+**Fix it now.**
+
+1. Purge the Cloudflare cache: dashboard → **Caching → Configuration → Purge
+   Everything**.
+2. Force a fresh fetch in the browser (a hard reload, or open the site in a
+   private window) so the cached copy is replaced.
+
+**Prevent it.** `frontend/nginx.conf` states the policy explicitly: hashed files
+under `/assets/` are `immutable`, `index.html` is `no-cache`, and a missing asset
+is a `404` instead of a cacheable `text/html` page. Cloudflare must also be told
+to respect those headers - **Caching → Configuration → Browser Cache TTL →
+Respect Existing Headers**. No cache rule needs to cache HTML; Vite's hashes
+already make caching the assets themselves safe.
+
+**Verify.** From the instance, a missing asset must be a `404` rather than a
+`200 text/html` page, and the shell must carry an explicit cache policy:
+
+```
+docker exec ticketproject-frontend wget -S -O /dev/null http://127.0.0.1/assets/index-DOESNOTEXIST.js 2>&1 \
+  | grep -iE 'HTTP/|Content-Type'
+
+docker exec ticketproject-frontend wget -S -O /dev/null http://127.0.0.1/ 2>&1 \
+  | grep -iE 'HTTP/|Content-Type|Cache-Control'
+```
 
 ## Local Development Setup (without Docker)
 
