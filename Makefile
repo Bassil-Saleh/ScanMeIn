@@ -59,6 +59,16 @@ up: ## Start the full stack in the background (home network, includes Mailpit).
 # other target (including the home-network `make up`/`make down`) would fail on a
 # machine that has no tunnel token, since Compose interpolates all services
 # before applying profiles.
+#
+# They also enforce "exactly one connector per tunnel", which is a failure mode
+# that is invisible from inside the stack: the Cloudflare edge load-balances every
+# request across ALL replicas of a tunnel, so a second connector that cannot reach
+# the origin answers 502 Bad Gateway for its share of the traffic while the
+# dashboard still reports it as Healthy - and no container logs anything, because
+# those requests never arrive. The usual source is a host-level cloudflared left
+# over from an earlier manual setup (`cloudflared service install <token>`), which
+# cannot resolve the Docker service name `caddy` at all. See the README section
+# "Troubleshooting: Bad Gateway (502) - a duplicate tunnel connector".
 define check_aws_env
 	@test -f .env || { echo "ERROR: no .env file. Run 'make bootstrap' first (on a public server, e.g.:"; echo "  ./scripts/init-secrets.sh --site-host <your-fqdn> --tls-mode public ...)"; exit 1; }
 	@grep -Eq '^TUNNEL_TOKEN=.+' .env || { echo "ERROR: TUNNEL_TOKEN is missing or empty in .env."; echo "Create a tunnel in the Cloudflare Zero Trust dashboard (Networks -> Tunnels ->"; echo "Create a tunnel), add a public hostname pointing at https://caddy:443, and paste"; echo "the connector token into .env. See the README."; exit 1; }
@@ -66,6 +76,35 @@ define check_aws_env
 		grep -Eq '^CF_ACCESS_TEAM_DOMAIN=.+' .env || { echo "ERROR: CF_ACCESS_MODE=on but CF_ACCESS_TEAM_DOMAIN is missing or empty in .env"; echo "(the Zero Trust team domain, without the scheme, e.g. scanmein.cloudflareaccess.com)."; exit 1; }; \
 		grep -Eq '^CF_ACCESS_AUD=.+' .env || { echo "ERROR: CF_ACCESS_MODE=on but CF_ACCESS_AUD is missing or empty in .env"; echo "(the Application Audience tag of your Access application)."; exit 1; }; \
 	fi
+	@if systemctl list-units --type=service --state=running --no-legend 2>/dev/null | awk '{print $$1}' | grep -qi '^cloudflared' \
+	   || [ -e /etc/cloudflared/token ]; then \
+		echo "ERROR: a host-level cloudflared connector (or its tunnel token file) is"; \
+		echo "present on this instance, while this stack runs its own connector as the"; \
+		echo "'cloudflared' compose service. Exactly ONE connector may hold a connection"; \
+		echo "to this tunnel: the edge load-balances across every replica, and a replica"; \
+		echo "that cannot reach https://caddy:443 answers 502 Bad Gateway for its share"; \
+		echo "of the traffic while still showing as Healthy in the dashboard. Remove it:"; \
+		echo "  sudo cloudflared service uninstall"; \
+		echo "  sudo apt-get remove -y cloudflared"; \
+		echo "  sudo rm -rf /etc/cloudflared"; \
+		exit 1; \
+	fi
+	@for pid in $$(pgrep -x cloudflared 2>/dev/null); do \
+		if ! grep -qE 'docker|containerd' /proc/$$pid/cgroup 2>/dev/null; then \
+			echo "ERROR: a host-level cloudflared process is running (PID $$pid)."; \
+			echo "Stop it: only the 'cloudflared' container may connect to this tunnel"; \
+			echo "(a host process cannot resolve the Docker service name 'caddy', so every"; \
+			echo "request the edge sends it fails with 502 Bad Gateway)."; \
+			exit 1; \
+		fi; \
+	done
+	@extra=$$(docker ps --filter ancestor=cloudflare/cloudflared --format '{{.Names}}' 2>/dev/null | grep -v '^ticketproject-cloudflared$$' || true); \
+	if [ -n "$$extra" ]; then \
+		echo "ERROR: extra cloudflared container(s) are running: $$extra"; \
+		echo "Only ticketproject-cloudflared may hold a connection to this tunnel."; \
+		exit 1; \
+	fi
+	@command -v cloudflared >/dev/null 2>&1 && echo "WARNING: a cloudflared binary is installed on this host - do not run it with this tunnel's token (see the note above)." || true
 endef
 
 up-aws: ## Start the stack for a public server (EC2): Let's Encrypt cert, Cloudflare Tunnel + Access, no Mailpit, email via Amazon SES.
