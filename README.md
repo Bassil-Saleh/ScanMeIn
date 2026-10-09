@@ -293,6 +293,15 @@ set by the Makefile target (`make up` forces `local`, `make up-aws` forces
      Header** = `scanmein.online`.
    Setting the Origin Server Name makes `cloudflared` **verify** Caddy's real
    Let's Encrypt certificate on that hop, so do not enable "No TLS Verify".
+   > **One connector, always.** Run the connector ONLY as the `cloudflared`
+   > compose service. Do not also install it on the host
+   > (`cloudflared service install <token>`) and do not reuse this token on
+   > another machine or instance: the edge load-balances every request across
+   > *all* replicas of a tunnel, and a replica that cannot reach `caddy:443`
+   > answers **502 Bad Gateway** for its share of the traffic while the dashboard
+   > still reports it as *Healthy*. `make up-aws` refuses to start while a
+   > host-level connector is present - see *"Troubleshooting: Bad Gateway (502) -
+   > a duplicate tunnel connector"* below.
 5. **Cloudflare Access application.** Zero Trust → Access → Applications → *Add*
    → *Self-hosted*:
    - Public hostname `scanmein.online`; set the session duration to about a week
@@ -497,6 +506,94 @@ docker compose logs caddy | tail -5            # "invalid token" / no JWT found
 
 After you log in through Access in a browser, the same request carries the
 `Cf-Access-Jwt-Assertion` header that Cloudflare signed and succeeds.
+
+## Troubleshooting: Bad Gateway (502) - a duplicate tunnel connector
+
+**Symptom.** Requests through Cloudflare Access fail *intermittently* with a
+`502 Bad Gateway` page: some load the site, others do not, and a retry may
+succeed. `make status` shows all five containers running, and - the giveaway -
+`docker compose logs caddy frontend backend` show **no request at all** for the
+times that failed, and no error anywhere. The tunnel and its connectors are
+reported as *Healthy* in the Zero Trust dashboard.
+
+**Cause.** More than one connector is attached to the same tunnel. A token-based
+connector takes its ingress rules from the tunnel's *remote* configuration, which
+here is `{"hostname":"scanmein.online","service":"https://caddy:443"}`. `caddy` is
+a Docker Compose service name resolved by Docker's embedded DNS, and that DNS only
+exists *inside* the `ticketnet` network - so a connector running on the host can
+never reach it:
+
+```
+ERR Unable to reach the origin service. The service may be down or it may not be
+    responding to traffic from cloudflared: dial tcp: lookup caddy on
+    127.0.0.53:53: server misbehaving
+```
+
+The edge load-balances every request across **all** replicas of a tunnel, so about
+half of them land on that broken replica and fail while the rest are served
+normally. Cloudflare's wording for this case: *"the tunnel itself is connected to
+the Cloudflare network, but cloudflared cannot reach the origin service defined in
+your ingress rule."*
+
+**Why the dashboard does not tell you.** A connector's *Healthy* / *Connected*
+status only means its connections to Cloudflare's edge are up - it says nothing
+about whether that connector can reach the origin, so a replica that 502s every
+request it receives still looks healthy. For contrast, error **1033** ("Argo
+Tunnel error") means the edge found *no* healthy connector at all, i.e. the tunnel
+is down, whereas **502** means a connector accepted the request and could not
+deliver it.
+
+**Diagnose.** On the instance:
+
+```
+systemctl status cloudflared --no-pager | head -5   # a HOST-level connector?
+ps -eo pid,etime,cmd | grep -i '[c]loudflared'      # /usr/bin/cloudflared + long uptime = host process
+sudo journalctl -u cloudflared --since '-3 hours' | tail -20   # the "Unable to reach the origin service" lines
+docker compose logs cloudflared | grep 'Generated Connector ID'  # the only ID the dashboard should list
+```
+
+Then compare that ID with the connector list in Zero Trust → Networks → Tunnels.
+The tells that an entry is *not* your container:
+
+| Field | The compose container | A host-level connector |
+| --- | --- | --- |
+| Hostname | a 12-hex container id (`f0cc0637b5a8`) | the instance's private DNS name (`ip-172-31-79-182`) |
+| Version | exactly the tag pinned in `compose.yaml` (`2026.9.1`) | whatever the distro package updated itself to (`2026.9.3`) |
+| Age | since the last `make up-aws` | as old as the manual install |
+
+**Fix.** Remove the extra connector so the compose service is the only one:
+
+```
+sudo cloudflared service uninstall      # removes the systemd unit
+sudo apt-get remove -y cloudflared      # removes the host binary
+sudo rm -rf /etc/cloudflared            # removes config.yml and the token file
+systemctl is-active cloudflared         # -> inactive
+```
+
+The replica then disappears from the dashboard on its own; if a *Disconnected*
+entry lingers, delete it there (the container regenerates its connector ID on
+every restart, so stale entries are normal). Verify that every request now reaches
+the origin, with an Access service token or the `CF_AppSession` cookie from a
+logged-in browser:
+
+```
+for i in $(seq 1 12); do curl -s -o /dev/null -w '%{http_code} ' \
+  -H "CF-Access-Client-Id: <id>" -H "CF-Access-Client-Secret: <secret>" \
+  https://scanmein.online/; done; echo
+# before: a mix such as 200 502 502 200 502 ...    after: 200 200 200 200 ...
+```
+
+Each of those requests must now appear in `docker compose logs caddy` (the access
+log configured in the `Caddyfile`, with token-carrying query parameters redacted)
+and in `docker compose logs frontend`.
+
+**Prevent it.** `make up-aws` refuses to start while a host-level `cloudflared`
+service, its token file, a host-level `cloudflared` process, or a second
+`cloudflared` container is present. If a 502 ever returns with only one connector
+in the dashboard, set `CF_LOGLEVEL=debug` in `.env`, run `make up-aws`, reproduce
+the failure and read `docker compose logs cloudflared` - then set it back to
+`info`. Container logs are bounded (`compose.yaml`: 10 MB x 3 per service), so
+verbose logging cannot fill the volume.
 
 ## Troubleshooting: If the page is blank after a rebuild (cached assets)
 
