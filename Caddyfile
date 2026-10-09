@@ -66,6 +66,32 @@
     # this stack relies on.
     request_header -Cf-Access-Authenticated-User-Email
 
+    # Access log: every request that reaches THIS origin, as JSON on stdout, so
+    # `docker compose logs caddy` shows both that a request arrived and the status
+    # it was answered with. That is the signal which was missing when a SECOND
+    # connector was attached to this tunnel: the edge load-balanced roughly half
+    # the requests to a replica that could not reach Caddy, so those requests
+    # produced a 502 at the edge and no line at all here. See the README section
+    # "Troubleshooting: Bad Gateway (502) - a duplicate tunnel connector".
+    #
+    # Redaction. Verification, password-reset and invitation tokens travel in the
+    # query string (/verify-account?token=..., /reset-password?token=...,
+    # ?publicToken=...), so only their VALUES are replaced - the path and status
+    # stay, which is what makes the log useful. Add any new token-carrying
+    # parameter here. Cookie and Authorization header values, which is where the
+    # Cloudflare Access JWT lives, are already logged as REDACTED by Caddy, and
+    # remote IPs are masked to their /16.
+    log {
+        output stdout
+        format filter {
+            request>uri query {
+                replace token REDACTED
+                replace publicToken REDACTED
+            }
+            request>remote_ip ip_mask 16 32
+        }
+    }
+
     # REST API -> Spring Boot backend.
     handle /api/* {
         reverse_proxy backend:8080
