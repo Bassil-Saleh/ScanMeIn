@@ -57,7 +57,10 @@ public class EventHostController
         summary = "Create a new event host account",
         description =
             "Registers a new event host account with the provided personal " +
-            "details, email address, password, and date of birth. A " +
+            "details, email address, password, and date of birth. The password " +
+            "must be between 12 and 128 characters long and must also be strong " +
+            "enough to resist guessing (it is scored from 0 to 4 by zxcvbn, and " +
+            "scores below the configured minimum are rejected). A " +
             "verification email will be sent to the provided email address. " +
             "This endpoint does not require authentication."
     )
@@ -174,7 +177,10 @@ public class EventHostController
         description =
             "Updates the password of the authenticated event host. " +
             "The new password must meet the minimum and maximum length " +
-            "requirements. Requires authentication."
+            "requirements, and must also be strong enough to resist " +
+            "guessing (it is scored from 0 to 4 by zxcvbn, and scores " +
+            "below the configured minimum are rejected). " +
+            "Requires authentication."
     )
     @PatchMapping(ApiPaths.EventHosts.PASSWORD)
     public SingleMessageResponse editEventHostPassword

@@ -94,7 +94,7 @@ public record CreateEventHostRequest
 
     @Schema
     (
-        description = "The event host's password, must be between 12 and 128 characters",
+        description = "The event host's password, must be between 12 and 128 characters and strong enough to resist guessing",
         requiredMode = Schema.RequiredMode.REQUIRED,
         example = "SecureP@ssw0rd123",
         minimum = "12",

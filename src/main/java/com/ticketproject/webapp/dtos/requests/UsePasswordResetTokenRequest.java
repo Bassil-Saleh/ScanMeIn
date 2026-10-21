@@ -36,7 +36,7 @@ public record UsePasswordResetTokenRequest
 
     @Schema
     (
-        description = "The new password for the account, must be between 12 and 128 characters",
+        description = "The new password for the account, must be between 12 and 128 characters and strong enough to resist guessing",
         requiredMode = Schema.RequiredMode.REQUIRED,
         example = "NewSecureP@ssw0rd789",
         minimum = "12",

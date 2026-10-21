@@ -77,7 +77,11 @@ public class PasswordResetTokenController
             "Completes the password reset process by validating the provided " +
             "password reset token and setting a new password for the " +
             "associated account. The token must not be expired or already " +
-            "used. This endpoint does not require authentication."
+            "used. The new password must be between 12 and 128 characters " +
+            "long and must also be strong enough to resist guessing (it is " +
+            "scored from 0 to 4 by zxcvbn, and scores below the configured " +
+            "minimum are rejected). This endpoint does not require " +
+            "authentication."
     )
     @SecurityRequirements
     @PatchMapping
