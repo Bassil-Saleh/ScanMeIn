@@ -97,6 +97,10 @@ services:
       # Empty = allowlist disabled (open registration). Set it before a public
       # deployment so only approved addresses can register / log in / receive email.
       ALLOWED_EMAIL_DOMAINS: ${ALLOWED_EMAIL_DOMAINS:-}
+      # Minimum zxcvbn strength score (0-4) a new password must reach before it
+      # is accepted when creating an account, resetting a password, or changing
+      # a password. Values outside 0-4 prevent the backend from starting.
+      PASSWORD_MIN_STRENGTH_SCORE: ${PASSWORD_MIN_STRENGTH_SCORE:-3}
       # Email transport. Defaults point at the Mailpit container (started only
       # with `--profile local` on a home network). On a public server (EC2), set
       # these in .env to your Amazon SES SMTP endpoint + credentials, e.g.
