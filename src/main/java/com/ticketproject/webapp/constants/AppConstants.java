@@ -971,6 +971,40 @@ public final class AppConstants
     }
 
     /**
+     * The Passwords inner class holds constants related to the application's
+     * password policy, including the zxcvbn strength scores used to reject
+     * new passwords which are too easy to guess.
+     */
+    public static final class Passwords
+    {
+        /**
+         * Private constructor. Not meant to be used.
+         * @throws UnsupportedOperationException
+         */
+        private Passwords()
+        {
+            throw new UnsupportedOperationException(NO_CONSTRUCTION_MSG);
+        }
+
+        /**
+         * The lowest possible score which zxcvbn can assign to a password.
+         */
+        public static final int MIN_STRENGTH_SCORE = 0;
+
+        /**
+         * The highest possible score which zxcvbn can assign to a password.
+         */
+        public static final int MAX_STRENGTH_SCORE = 4;
+
+        /**
+         * The default minimum strength score a new password must reach before
+         * it is accepted. Used when the {@code app.password.min-strength-score}
+         * property is missing from the application's configuration.
+         */
+        public static final int DEFAULT_MIN_STRENGTH_SCORE = 3;
+    }
+
+    /**
      * The Jwt inner class holds constants related to JSON Web Token
      * generation and validation.
      */
