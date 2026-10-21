@@ -22,6 +22,7 @@ import com.ticketproject.webapp.services.database.BlindIndexService;
 import com.ticketproject.webapp.services.database.HashingService;
 import com.ticketproject.webapp.services.email.EmailService;
 import com.ticketproject.webapp.services.access.AccessControlService;
+import com.ticketproject.webapp.services.security.PasswordStrengthService;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -46,6 +47,7 @@ public class EventHostService
     private final HashingService hashingService;
     private final EmailService emailService;
     private final AccessControlService accessControlService;
+    private final PasswordStrengthService passwordStrengthService;
 
     public EventHostService
     (
@@ -54,7 +56,8 @@ public class EventHostService
         HashingService hashingService,
         EventRepository eventRepository,
         EmailService emailService,
-        AccessControlService accessControlService
+        AccessControlService accessControlService,
+        PasswordStrengthService passwordStrengthService
     )
     {
         this.eventHostRepository = eventHostRepository;
@@ -63,6 +66,7 @@ public class EventHostService
         this.eventRepository = eventRepository;
         this.emailService = emailService;
         this.accessControlService = accessControlService;
+        this.passwordStrengthService = passwordStrengthService;
     }
 
     /**
@@ -73,6 +77,8 @@ public class EventHostService
      * an email address already used by a preexisting event host account
      * @throws EventHostUnderageException if the request contains a date of birth
      * less than 18 years old
+     * @throws InvalidRequestException if the request contains a password
+     * whose strength score is below the configured minimum
      */
     public SingleMessageResponse createEventHost(CreateEventHostRequest request)
     {
@@ -96,6 +102,12 @@ public class EventHostService
             throw new EventHostUnderageException
             ("Must be at least " + AppConstants.DTO.EventHosts.Sizes.MIN_AGE_YEARS + " years old to create a new account");
         }
+
+        // Reject the password if it is too easy to guess. This is checked
+        // after the above checks so that the responses which reveal whether
+        // an email address is already registered (or whether the user is
+        // underage) stay the same as they were before this check existed.
+        passwordStrengthService.requireStrongPassword(request.password());
 
         // Create a new EventHost entity.
         // The EventHost constructor should already handle
