@@ -241,12 +241,14 @@ public class EventHostService
     }
 
     /**
-     * Service a reques to change an event host's password.
+     * Service a request to change an event host's password.
      * @param eventHost the authenticated EventHost
      * @param request the request body
      * @return a SingleMessageResponse on success
      * @throws UnauthorizedException if eventHost is null (implying that the 
      * JWT authentication filter could not authenticate an EventHost)
+     * @throws InvalidRequestException if the request contains a password
+     * whose strength score is below the configured minimum
      */
     public SingleMessageResponse editEventHostPassword(EventHost eventHost, EditEventHostPasswordRequest request)
     {
@@ -254,6 +256,9 @@ public class EventHostService
         {
             throw new UnauthorizedException("Authentication required");
         }
+
+        // Reject the new password if it is too easy to guess.
+        passwordStrengthService.requireStrongPassword(request.password());
 
         eventHost.setPassword(request.password());
         eventHost.setLastUpdated(LocalDateTime.now());

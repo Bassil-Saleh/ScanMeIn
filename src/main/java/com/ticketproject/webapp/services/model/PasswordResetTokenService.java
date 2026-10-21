@@ -15,6 +15,7 @@ import com.ticketproject.webapp.services.database.BlindIndexService;
 import com.ticketproject.webapp.services.database.HashingService;
 import com.ticketproject.webapp.services.email.EmailService;
 import com.ticketproject.webapp.services.access.AccessControlService;
+import com.ticketproject.webapp.services.security.PasswordStrengthService;
 import com.ticketproject.webapp.model.entities.PasswordResetToken;
 import com.ticketproject.webapp.model.entities.EventHost;
 import com.ticketproject.webapp.model.repositories.EventHostRepository;
@@ -33,6 +34,7 @@ public class PasswordResetTokenService
     private final BlindIndexService blindIndexService;
     private final HashingService hashingService;
     private final AccessControlService accessControlService;
+    private final PasswordStrengthService passwordStrengthService;
 
     public PasswordResetTokenService
     (
@@ -41,7 +43,8 @@ public class PasswordResetTokenService
         EmailService emailService,
         BlindIndexService blindIndexService,
         HashingService hashingService,
-        AccessControlService accessControlService
+        AccessControlService accessControlService,
+        PasswordStrengthService passwordStrengthService
     )
     {
         this.passwordResetTokenRepository = passwordResetTokenRepository;
@@ -50,6 +53,7 @@ public class PasswordResetTokenService
         this.blindIndexService = blindIndexService;
         this.hashingService = hashingService;
         this.accessControlService = accessControlService;
+        this.passwordStrengthService = passwordStrengthService;
     }
 
     /**
@@ -107,6 +111,8 @@ public class PasswordResetTokenService
      * @return a SingleMessageResponse on success
      * @throws InvalidCredentialsException if no account is found
      * with the password reset token provided in the request
+     * @throws InvalidRequestException if the request contains a password
+     * whose strength score is below the configured minimum
      */
     public SingleMessageResponse usePasswordResetToken(UsePasswordResetTokenRequest request)
     {
@@ -120,6 +126,13 @@ public class PasswordResetTokenService
 
         PasswordResetToken foundToken = passwordResetToken.get();
         EventHost foundEventHost = foundToken.getEventHost();
+
+        // Reject the new password if it is too easy to guess. This is checked
+        // after the token lookup so that an invalid token is still reported as
+        // an authentication failure, and before the token is marked as used so
+        // that a valid token is not consumed by a request this application
+        // refuses to complete.
+        passwordStrengthService.requireStrongPassword(request.password());
 
         foundEventHost.setPassword(request.password());
         foundEventHost.setLastUpdated(LocalDateTime.now());
