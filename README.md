@@ -702,6 +702,11 @@ app.blind-index.key-base64=your_second_base64_encoded_secret_key_goes_here
 # For signing and authenticating JSON Web Tokens.
 app.jwt.secret-base64=your_third_base64_encoded_secret_key_goes_here
 
+# Minimum zxcvbn strength score (0-4) a new password must reach before this
+# application accepts it. Enforced when creating an account, resetting a
+# password, and changing a password.
+app.password.min-strength-score=3
+
 # SMTP server config used by this application to send out emails to users
 spring.mail.host=your_smtp_hostname_goes_here
 spring.mail.port=your_smtp_port_goes_here
@@ -714,6 +719,17 @@ spring.mail.properties.mail.smtp.auth=true_or_false
 # Set this to true or false based on your needs.
 spring.mail.properties.mail.smtp.starttls.enable=true_or_false
 ```
+
+> **Password strength policy.** Every password this application accepts is first
+> scored from `0` (very weak) to `4` (very strong) by
+> [zxcvbn](https://github.com/nulab/zxcvbn4j). A password whose score is below
+> `app.password.min-strength-score` (default `3`) is rejected with a `400`
+> response when creating an account (`POST /api/v1/event-hosts`), resetting a
+> password (`PATCH /api/v1/password-reset-tokens`), or changing a password
+> (`PATCH /api/v1/event-hosts/password`). The `12..128` character length
+> requirement still applies. In the `docker` profile the same value is read from
+> the `PASSWORD_MIN_STRENGTH_SCORE` environment variable; a value outside
+> `0..4` prevents the backend from starting.
 
 5. Navigate to the `frontend/` directory and run this command
 to install the application's frontend dependencies:

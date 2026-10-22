@@ -23,8 +23,10 @@ import org.springframework.test.web.servlet.MvcResult;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -54,7 +56,13 @@ class EventHostControllerTest
 
     private static final String BASE_PATH = ApiPaths.BASE + ApiPaths.EventHosts.ROOT;
     private static final String TEST_EMAIL = "eventhosttest@example.com";
-    private static final String TEST_PASSWORD = "securePassword123";
+    private static final String TEST_PASSWORD = "Correct-Horse-Battery-Staple-42!";
+
+    /**
+     * A password which satisfies the 12-128 character length requirement but
+     * only scores 1 out of 4 in zxcvbn, so it must be rejected as too weak.
+     */
+    private static final String WEAK_PASSWORD = "password1234";
 
     /**
      * Ensure that each test starts from a fresh state so that
@@ -248,6 +256,24 @@ class EventHostControllerTest
                         "John", "Doe", TEST_EMAIL, "short", "1990-01-01")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
+        }
+
+        @Test
+        @DisplayName("Creating account with a long but weak password returns 400 and creates nothing")
+        void weakPasswordReturns400() throws Exception
+        {
+            mockMvc.perform(post(BASE_PATH)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildCreateEventHostRequestBody(
+                        "John", "Doe", TEST_EMAIL, WEAK_PASSWORD, "1990-01-01")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message", containsString("Password is too weak")))
+                .andExpect(jsonPath("$.message", containsString("minimum required score is 3")));
+
+            // Neither a verification email nor an account should exist.
+            verifyNoInteractions(emailService);
+            assertThat(eventHostRepository.count()).isZero();
         }
 
         @Test
@@ -528,6 +554,32 @@ class EventHostControllerTest
                     .content(requestBody))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
+        }
+
+        @Test
+        @DisplayName("Password edit with a long but weak password returns 400 and keeps the old password")
+        void weakPasswordReturns400() throws Exception
+        {
+            createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            String requestBody = """
+                {
+                    "password": "%s"
+                }
+                """.formatted(WEAK_PASSWORD);
+
+            mockMvc.perform(patch(BASE_PATH + ApiPaths.EventHosts.PASSWORD)
+                    .header("Authorization", "Bearer " + jwt)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message", containsString("Password is too weak")))
+                .andExpect(jsonPath("$.message", containsString("minimum required score is 3")));
+
+            // The original password must still work, proving nothing changed.
+            loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
         }
     }
 

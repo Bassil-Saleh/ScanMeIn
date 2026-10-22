@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -51,7 +52,13 @@ class PasswordResetTokenControllerTest
 
     private static final String BASE_PATH = ApiPaths.BASE + ApiPaths.PasswordResetTokens.ROOT;
     private static final String TEST_EMAIL = "resettest@example.com";
-    private static final String TEST_PASSWORD = "securePassword123";
+    private static final String TEST_PASSWORD = "Correct-Horse-Battery-Staple-42!";
+
+    /**
+     * A password which satisfies the 12-128 character length requirement but
+     * only scores 1 out of 4 in zxcvbn, so it must be rejected as too weak.
+     */
+    private static final String WEAK_PASSWORD = "password1234";
 
     /**
      * Ensure that each test starts from a fresh state so that
@@ -84,6 +91,23 @@ class PasswordResetTokenControllerTest
         host.generateVerificationToken();
         host.setVerified(true);
         return eventHostRepository.save(host);
+    }
+
+    /**
+     * Builds a JSON request body for using a password reset token.
+     *
+     * @param resetToken the password reset token
+     * @param password the new password
+     * @return a JSON string representing the use password reset token request
+     */
+    private String buildUseTokenRequestBody(String resetToken, String password)
+    {
+        return """
+            {
+                "passwordResetToken": "%s",
+                "password": "%s"
+            }
+            """.formatted(resetToken, password);
     }
 
     @Nested
@@ -285,6 +309,47 @@ class PasswordResetTokenControllerTest
                     .content(useRequestBody))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
+        }
+
+        @Test
+        @DisplayName("Using reset token with a long but weak password returns 400 and leaves the token usable")
+        void weakPasswordReturns400AndDoesNotConsumeToken() throws Exception
+        {
+            createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+
+            // Request a password reset token.
+            String createRequestBody = """
+                {
+                    "email": "%s"
+                }
+                """.formatted(TEST_EMAIL);
+
+            mockMvc.perform(post(BASE_PATH)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(createRequestBody))
+                .andExpect(status().isCreated());
+
+            // Capture the reset token from the mocked email service.
+            ArgumentCaptor<String> tokenCaptor = ArgumentCaptor.forClass(String.class);
+            verify(emailService).sendPasswordResetEmail(eq(TEST_EMAIL), tokenCaptor.capture());
+            String resetToken = tokenCaptor.getValue();
+
+            // Try to use the reset token with a long but weak password.
+            mockMvc.perform(patch(BASE_PATH)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildUseTokenRequestBody(resetToken, WEAK_PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message", containsString("Password is too weak")))
+                .andExpect(jsonPath("$.message", containsString("minimum required score is 3")));
+
+            // The rejected request must not have consumed the token, so the
+            // same token still works when a strong password is supplied.
+            mockMvc.perform(patch(BASE_PATH)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildUseTokenRequestBody(resetToken, "newSecurePassword456")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Your password has been reset."));
         }
 
         @Test

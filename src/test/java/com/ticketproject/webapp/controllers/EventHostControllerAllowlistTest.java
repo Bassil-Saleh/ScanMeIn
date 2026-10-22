@@ -52,7 +52,13 @@ class EventHostControllerAllowlistTest
     private static final String LOGIN_PATH = ApiPaths.BASE + ApiPaths.Sessions.ROOT + ApiPaths.Sessions.LOGIN;
     private static final String ALLOWED_EMAIL = "me@allowed.com";
     private static final String DISALLOWED_EMAIL = "eve@other.com";
-    private static final String PASSWORD = "securePassword123";
+    private static final String PASSWORD = "Correct-Horse-Battery-Staple-42!";
+
+    /**
+     * A password which satisfies the 12-128 character length requirement but
+     * only scores 1 out of 4 in zxcvbn, so it must be rejected as too weak.
+     */
+    private static final String WEAK_PASSWORD = "password1234";
 
     @BeforeEach
     void setUp()
@@ -80,6 +86,11 @@ class EventHostControllerAllowlistTest
 
     private String buildCreateBody(String email)
     {
+        return buildCreateBody(email, PASSWORD);
+    }
+
+    private String buildCreateBody(String email, String password)
+    {
         return """
             {
                 "firstName": "Test",
@@ -88,7 +99,7 @@ class EventHostControllerAllowlistTest
                 "password": "%s",
                 "dateOfBirth": "1990-01-01"
             }
-            """.formatted(email, PASSWORD);
+            """.formatted(email, password);
     }
 
     private String loginAndGetJwt(String email, String password) throws Exception
@@ -132,6 +143,28 @@ class EventHostControllerAllowlistTest
                 .content(buildCreateBody(DISALLOWED_EMAIL)))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    @DisplayName("Registration with a disallowed email is rejected by the allowlist before the password is scored")
+    void registrationWithDisallowedEmailAndWeakPasswordReturns403() throws Exception
+    {
+        mockMvc.perform(post(BASE_PATH)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(buildCreateBody(DISALLOWED_EMAIL, WEAK_PASSWORD)))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    @DisplayName("Registration with an allowed email but a weak password returns 400")
+    void registrationWithAllowedEmailAndWeakPasswordReturns400() throws Exception
+    {
+        mockMvc.perform(post(BASE_PATH)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(buildCreateBody(ALLOWED_EMAIL, WEAK_PASSWORD)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.status").value(400));
     }
 
     @Test
