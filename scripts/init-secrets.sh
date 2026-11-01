@@ -505,7 +505,7 @@ if [ "$TLS_MODE" = "public" ]; then
     report_value "MAIL_FROM_ADDRESS" "$MAIL_FROM_ADDRESS" \
         "the default sender is not a verified SES identity, so SES rejects the mail"
     report_value "ALLOWED_EMAIL_DOMAINS" "$ALLOWED_EMAIL_DOMAINS" \
-        "the app-level allowlist is OFF: anyone past Access may register an account"
+        "the app-level allowlist is OFF: anyone on the Internet may register an account"
     echo
     if [ "$MISSING" -gt 0 ]; then
         echo "  ${MISSING} value(s) are still empty. Edit ${ENV_FILE} to fill them in,"
