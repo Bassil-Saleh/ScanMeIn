@@ -11,7 +11,7 @@
 #   make bootstrap  Generate .env secrets and TLS certs (first time only).
 #   make build      Build the backend, frontend, and custom Caddy Docker images.
 #   make up         Start the full stack in the background (home network).
-#   make up-aws     Start the stack for a public server (EC2 + Cloudflare Access).
+#   make up-aws     Start the stack for a public server (EC2, public site + email allowlist).
 #   make down       Stop and remove the stack (data volume is preserved).
 #                   Teardown always activates BOTH the "local" and the "tunnel"
 #                   profile so the Mailpit and cloudflared containers are removed
@@ -51,9 +51,10 @@ up: ## Start the full stack in the background (home network, includes Mailpit).
 #   --profile tunnel    -> the cloudflared connector becomes the ONLY public
 #                          ingress; it dials out to Cloudflare, so the security
 #                          group needs no 80/443 rule and the origin cannot be
-#                          reached by its raw IP address. Cloudflare Access
-#                          authenticates users at the edge, and Caddy re-validates
-#                          the Access JWT at the origin (CF_ACCESS_MODE=on).
+#                          reached by its raw IP address. Who may hold an account
+#                          is decided by the app-level email allowlist
+#                          (ALLOWED_EMAIL_DOMAINS); Cloudflare Access is optional
+#                          and switched off in this topology (CF_ACCESS_MODE=off).
 # The preflight checks below exist because compose.yaml cannot enforce them
 # itself: it must interpolate TUNNEL_TOKEN with an empty default, otherwise every
 # other target (including the home-network `make up`/`make down`) would fail on a
@@ -107,7 +108,7 @@ define check_aws_env
 	@command -v cloudflared >/dev/null 2>&1 && echo "WARNING: a cloudflared binary is installed on this host - do not run it with this tunnel's token (see the note above)." || true
 endef
 
-up-aws: ## Start the stack for a public server (EC2): Let's Encrypt cert, Cloudflare Tunnel + Access, no Mailpit, email via Amazon SES.
+up-aws: ## Start the stack for a public server (EC2): Let's Encrypt cert, Cloudflare Tunnel + app email allowlist, no Mailpit, email via Amazon SES.
 	$(check_aws_env)
 	TLS_MODE=public docker compose --profile tunnel up -d
 

@@ -97,12 +97,28 @@
         reverse_proxy backend:8080
     }
 
-    # API documentation (springdoc / Swagger UI) -> Spring Boot backend.
+    # API documentation (springdoc / Swagger UI) is deliberately NOT published.
+    # These two paths used to be proxied to backend:8080, where the only thing
+    # keeping them private was Cloudflare Access at the edge. This stack is now
+    # a public site (see README "Locking the site down"), and the OpenAPI
+    # document is a complete map of every endpoint, request body and error code
+    # - reconnaissance that helps nobody but an attacker - so it gets no route.
+    #
+    # They answer 404 here rather than being deleted outright. Deleting them
+    # would hand these paths to the SPA fallback below, which serves index.html
+    # with a 200 for ANY unknown path (frontend/nginx.conf:
+    #   try_files $uri $uri/ /index.html
+    # ) - a success status for a route that does not exist, and an HTML body
+    # where JSON was requested.
+    #
+    # The backend container still serves both paths; it simply has no public
+    # route to them. Read the docs by running the backend locally instead
+    # (README -> "Local Development Setup").
     handle /swagger-ui/* {
-        reverse_proxy backend:8080
+        respond 404
     }
     handle /v3/api-docs* {
-        reverse_proxy backend:8080
+        respond 404
     }
 
     # Everything else -> the React frontend.

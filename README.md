@@ -93,7 +93,7 @@ Assuming your chosen hostname is `ticketproject.local`:
 | --- | --- |
 | App (HTTPS) | `https://ticketproject.local` |
 | Mailpit web UI (emails + QR codes), `local` profile only | `http://ticketproject.local:8025` |
-| Swagger API docs | `https://ticketproject.local/swagger-ui/index.html` |
+| Swagger API docs | Not exposed through Caddy any more - run the backend directly and open `http://localhost:8080/swagger-ui/index.html` (see *"Local Development Setup"*) |
 
 Manage the stack with `make status`, `make logs`, `make down`.
 Run `make help` to list all targets.
@@ -102,13 +102,16 @@ Run `make help` to list all targets.
 > `make bootstrap` only if you want fresh secrets (this does NOT delete
 > database data; use `make clean` for that).
 
-### Restricting access with an email allowlist (public deployments)
+### Restricting who may use the site with an email allowlist
 
-By default registration is open, which is what you want on a trusted home
-network. Before deploying the stack to a public server (e.g. an EC2 instance)
-where you do **not** want strangers creating accounts, set the
-`ALLOWED_EMAIL_DOMAINS` value in `.env` to a comma-separated list of the email
-addresses and/or domains that are allowed to use the site:
+This stack is deployed as a **public site**: anyone who can reach it can load
+the SPA and browse the pages of published events. There is no Cloudflare Access
+application in front of it and `.env` says `CF_ACCESS_MODE=off` (see *"Locking
+the site down"*), so the application-level email allowlist is the **only** thing
+that decides who may hold an account in it.
+
+Set the `ALLOWED_EMAIL_DOMAINS` value in `.env` to a comma-separated list of the
+email addresses and/or domains that are allowed to use the site:
 
 ```
 # Only these people can register, log in, register for events,
@@ -119,22 +122,47 @@ ALLOWED_EMAIL_DOMAINS=you@yourdomain.com,yourdomain.com,friend@gmail.com
 - An entry containing `@` (e.g. `you@yourdomain.com`) must match exactly.
 - A bare domain (e.g. `yourdomain.com`) matches any address at that domain and
   its subdomains. Matching is case-insensitive.
-- Leaving it **empty** disables the allowlist (open registration).
 
-After editing `.env`, run `make up-aws` to apply.
-Anyone whose email is not on the list receives a `403 Forbidden` when trying to
-register, and login attempts for disallowed addresses fail with the same generic
-"invalid credentials" message used for a wrong password (so the response does
-not reveal whether an account exists).
+> **This is the only gate left.** An empty or blank `ALLOWED_EMAIL_DOMAINS`
+> disables the allowlist - `AccessControlService` treats empty as "no
+> restriction" - which on a public server means **anyone on the internet can
+> register**. Check it before and after any deployment:
+>
+> ```
+> grep '^ALLOWED_EMAIL_DOMAINS=' .env
+> docker compose exec backend printenv ALLOWED_EMAIL_DOMAINS   # must print the list
+> ```
 
-This allowlist is the **application-level** gate: it decides which of the people
-who can reach the site may hold an account in it. It is *not* what stops a
-stranger from loading the site in the first place - that is the job of the
-Cloudflare Tunnel + Cloudflare Access layers described in the next section. The
-two lists should be kept in sync, and remember that somebody you invite has to
-appear in **both** of them to be able to open an invitation link.
+Apply a change with `make up-aws`. The value is read once at startup by
+`AccessControlService`, so the **backend** container is the one that has to be
+recreated; `make up-aws` does exactly that and restarts only the container whose
+environment changed. Adding or removing a person is therefore `.env` plus
+`make up-aws` - no dashboard change, no image rebuild.
 
-## Deploying to a Public Server (EC2) with Amazon SES + Cloudflare Access
+Where it is enforced:
+
+| Surface | Result for an address that is not on the list |
+| --- | --- |
+| Account registration (`EventHostService`) | `403 "Access is restricted to approved email addresses."` |
+| Login (`SessionService`) | the same generic `401 "Invalid email address or password"` as a wrong password, so an account's existence is not revealed |
+| Password reset (`PasswordResetTokenService`) | the same generic success message as a real request, and nothing is sent |
+| Changing the account's email (`EventHostService`) | `403` |
+| Event registration and invitations (`AttendeeService`) | `403` |
+| Every outbound email (`EmailService`) | the send is refused |
+
+The sign-up form renders the `403` inline (`SignUpPage.tsx` displays
+`data.message`), so a disallowed visitor gets an explanation instead of a silent
+failure.
+
+What the allowlist does **not** do is hide the site. The JavaScript bundle, the
+pages of published events (`GET /api/v1/events/{publicId}` is explicitly
+unauthenticated), account verification, and the registration / login /
+password-reset endpoints are all reachable by anyone - they simply refuse to
+complete an action for a non-allowlisted address. Treat everything the frontend
+ships as public information. The network layers that decide *whether traffic
+reaches this stack at all* are unchanged, and are described in the next section.
+
+## Deploying to a Public Server (EC2) with Amazon SES + Cloudflare Tunnel
 
 On a public server you should **not** run Mailpit (its web UI would expose every
 email, including password-reset links and ticket QR codes, to anyone who can
@@ -143,12 +171,14 @@ its SMTP interface. The same Docker images, `compose.yaml` and `Caddyfile` are
 used for both deployments - only the environment changes.
 
 A public deployment also differs in how traffic reaches it: its **only** ingress
-is a **Cloudflare Tunnel** connector that dials *out* to Cloudflare, and every
-request arriving through that tunnel must carry a valid **Cloudflare Access**
-JWT, which Caddy verifies at the origin. The result is that the site cannot be
-reached by its raw IP address (there is no inbound port to reach), and nobody who
-is not on your email allowlist can use it. See *"Locking the site down"* below
-for how each layer contributes and what to configure in each dashboard.
+is a **Cloudflare Tunnel** connector that dials *out* to Cloudflare, so the site
+cannot be reached by its raw IP address (there is no inbound port to reach) and
+the hostname never has to appear in DNS as an A record. The site itself is
+**public** - it is not behind Cloudflare Access - and the only thing deciding
+who may hold an account is the application-level email allowlist
+(`ALLOWED_EMAIL_DOMAINS`, see above). Cloudflare Access and the origin-side JWT
+check (`CF_ACCESS_MODE=on`) are still in this repository and can be switched
+back on at any time: see *"Locking the site down"* below.
 
 ### How the two deployments differ
 
@@ -160,7 +190,7 @@ for how each layer contributes and what to configure in each dashboard.
 | Certificate (Caddy) | mkcert LAN cert from `certs/` | Let's Encrypt via Cloudflare DNS-01 |
 | Ingress | Devices connect straight to Caddy on the LAN | **Cloudflare Tunnel only** - the `cloudflared` container dials out; no inbound 80/443 |
 | `CADDY_BIND_ADDR` | `0.0.0.0` (reachable on the LAN) | `127.0.0.1` (loopback only; the tunnel reaches Caddy on the internal Docker network) |
-| Who may use the site | Anyone on your network | Only the emails in your **Cloudflare Access** policy, and Caddy re-validates the Access JWT (`CF_ACCESS_MODE=on`) |
+| Who may use the site | Anyone on your network (`ALLOWED_EMAIL_DOMAINS` stays empty unless you set it) | Anyone may browse; only the emails in `ALLOWED_EMAIL_DOMAINS` may register, log in, or use account features (`CF_ACCESS_MODE=off`; Access is optional) |
 | EC2 security group | n/a | Inbound **22/tcp from your IP only**; no 80/443 rule at all |
 | Mailpit | Started (web UI on `8025`) | **Not started** (no `local` profile) |
 | Email transport | Mailpit SMTP (`mailpit:1025`, no auth/TLS) | Amazon SES SMTP (`email-smtp.<region>.amazonaws.com:587`, auth + STARTTLS) |
@@ -281,9 +311,10 @@ set by the Makefile target (`make up` forces `local`, `make up-aws` forces
    <https://dash.cloudflare.com/profile/api-tokens> with **Zone → Zone → Read**
    and **Zone → DNS → Edit** for that zone. Caddy uses it to solve the DNS-01
    challenge. Keep it secret.
-3. **Zero Trust team domain.** In the Zero Trust dashboard note your team domain
-   (`<team>.cloudflareaccess.com`). It is both the *issuer* of the Access JWTs and
-   the host of the public keys Caddy verifies them against.
+3. **Zero Trust team domain** (only if you want Cloudflare Access). In the Zero
+   Trust dashboard note your team domain (`<team>.cloudflareaccess.com`). It is
+   both the *issuer* of the Access JWTs and the host of the public keys Caddy
+   verifies them against.
 4. **Cloudflare Tunnel.** Zero Trust → Networks → Tunnels → *Create a tunnel*
    (Cloudflared) and copy the **token** - it becomes `TUNNEL_TOKEN` in `.env`.
    Under *Public hostname*, add `scanmein.online` with:
@@ -302,8 +333,10 @@ set by the Makefile target (`make up` forces `local`, `make up-aws` forces
    > still reports it as *Healthy*. `make up-aws` refuses to start while a
    > host-level connector is present - see *"Troubleshooting: Bad Gateway (502) -
    > a duplicate tunnel connector"* below.
-5. **Cloudflare Access application.** Zero Trust → Access → Applications → *Add*
-   → *Self-hosted*:
+5. **(Optional) Cloudflare Access application.** Skip this for the public site
+   described in this README - there the app-level email allowlist is the gate,
+   and *"Locking the site down"* explains how to add Access later. To add it
+   now: Zero Trust → Access → Applications → *Add* → *Self-hosted*:
    - Public hostname `scanmein.online`; set the session duration to about a week
      so an expired session does not interrupt the SPA mid-use.
    - Exactly one policy: **Allow** → Include → **Emails** = your allowlist (or
@@ -313,11 +346,12 @@ set by the Makefile target (`make up` forces `local`, `make up-aws` forces
      email addresses.
    - Copy the **Application Audience (AUD)** tag from the application overview -
      it becomes `CF_ACCESS_AUD` in `.env`.
-6. **(Recommended) Service token for scripts.** Access → Service Auth → *Create
-   Service Token*, then add a second policy to the application with the action
-   **Service Auth** that includes it. Non-browser clients cannot complete an
-   interactive login, so they authenticate with headers instead - which is what
-   the `curl` helpers in `api-scripts/` need once the site is behind Access:
+6. **(Optional) Service token for scripts** - only needed with Access. Access →
+   Service Auth → *Create Service Token*, then add a second policy to the
+   application with the action **Service Auth** that includes it. Non-browser
+   clients cannot complete an interactive login, so they authenticate with
+   headers instead - which is what the `curl` helpers in `api-scripts/` need
+   once the site is behind Access:
    ```
    curl -H "CF-Access-Client-Id: <id>" -H "CF-Access-Client-Secret: <secret>" \
         https://scanmein.online/api/v1/events
@@ -325,31 +359,76 @@ set by the Makefile target (`make up` forces `local`, `make up-aws` forces
 7. **SSL/TLS mode** → **Full (strict)**, so Cloudflare validates the origin's
    Let's Encrypt certificate instead of accepting anything.
 
-### Locking the site down: Cloudflare Tunnel + Cloudflare Access
+### Locking the site down: what is public, and what is not
 
-While the project is in development, only a specific list of people may use it.
-Five independent layers produce that, and it is worth knowing what each one is
-responsible for:
+This stack is deployed as a public site, so two independent questions have to be
+kept apart:
 
-| # | Layer | Where | What it stops | Configured by |
+- **Can a request reach the containers at all?** Answered by the network layers.
+  They are still locked down, and nothing in this section changes them.
+- **Who may hold an account?** Answered by the app-level email allowlist. On a
+  public deployment it is the only gate, so it is the thing to get right.
+
+| # | Layer | Where | What it decides | Configured by |
 | --- | --- | --- | --- | --- |
 | 1 | Security group | AWS | Any TCP connection to the instance except SSH from your IP. There is no inbound 80/443 rule, so the raw IP address leads nowhere. | EC2 console |
-| 2 | Cloudflare Tunnel | EC2 → Cloudflare | Any route that does not go through Cloudflare: the only way in is the *outbound* connection the `cloudflared` container holds open, and Caddy's ports are bound to loopback (`CADDY_BIND_ADDR=127.0.0.1`). | `TUNNEL_TOKEN`, `tunnel` profile |
-| 3 | Cloudflare Access | Cloudflare edge | Everybody who is not on the email allowlist: they get a login page and never reach the origin. | Access application + policy |
-| 4 | Access JWT validation | Caddy (origin) | A request that reaches the origin *without* having passed Access - a misconfigured hostname, a second tunnel, another container on the host, or an inbound rule somebody adds later. Caddy verifies the signature, issuer, audience and expiry and returns `401` otherwise. | `CF_ACCESS_MODE=on`, `caddy/access-on.caddy` |
-| 5 | App email allowlist | Spring Boot | Which of the people who did get in may hold an account: register, log in, be invited, receive email. | `ALLOWED_EMAIL_DOMAINS` |
+| 2 | Cloudflare Tunnel | EC2 → Cloudflare | The only route in: the *outbound* connection the `cloudflared` container holds open, with Caddy's ports bound to loopback (`CADDY_BIND_ADDR=127.0.0.1`). | `TUNNEL_TOKEN`, `tunnel` profile |
+| 3 | Cloudflare edge | Cloudflare | Abuse, not identity: WAF and rate-limiting rules, **if you add them**. None ship with this repository, so treat this as recommended hardening rather than an existing layer. | Cloudflare dashboard |
+| 4 | App email allowlist | Spring Boot | **Who may hold an account**: register, log in, be invited, receive email. | `ALLOWED_EMAIL_DOMAINS` |
 
-**Why layer 4 exists when the tunnel already blocks direct access.** Cloudflare
-Access only protects requests that travel *through* Cloudflare. Layer 4 turns
-"trust the network path" into "verify a cryptographic proof", so the guarantee
-does not silently disappear if the network path ever changes. It is implemented
-in `caddy/access-on.caddy` using the `jwtauth` directive from
-[`ggicci/caddy-jwt`](https://github.com/ggicci/caddy-jwt), compiled into the
-custom Caddy image by `caddy.Dockerfile`, and verifies each request's
+An earlier revision of this table listed **Cloudflare Access** (at the edge) and
+**Access JWT validation** (at the origin, `CF_ACCESS_MODE=on` with
+`caddy/access-on.caddy`) as two further layers. Both are **retired for this
+deployment**: the site is public by design and `.env` says `CF_ACCESS_MODE=off`.
+The machinery is still in the repository, and the procedure to bring it back is
+at the end of this section.
+
+#### What is public
+
+- The SPA and its JavaScript bundle. Anyone who can load the site can read every
+  byte of the frontend, so no secret may ever be built into it.
+- The pages of published events: `GET /api/v1/events/{publicId}` is explicitly
+  unauthenticated (`EventController`), while events still in `DRAFT` remain
+  visible only to the host who created them.
+- The account endpoints - registration (`POST /api/v1/event-hosts`), account
+  verification (`GET /api/v1/event-hosts/verification`), login
+  (`POST /api/v1/sessions/login`), password reset
+  (`POST` and `PATCH /api/v1/password-reset-tokens`) and public event
+  registration (`POST /api/v1/attendees/registration`). They are reachable, but
+  they answer `403` (registration, invitations, email changes) or a generic
+  `401` (login, password reset) for an address that is not on
+  `ALLOWED_EMAIL_DOMAINS`.
+
+#### What is not public
+
+- The origin by its IP address, or by any route that does not arrive through the
+  Cloudflare Tunnel: there is no inbound port to reach, and Caddy's ports are
+  bound to loopback.
+- The API documentation. `Caddyfile` answers `404` for `/swagger-ui/*` and
+  `/v3/api-docs*`; the backend container still serves them, but there is no
+  public route to them. Read the docs by running the backend locally (see
+  *"Local Development Setup"*).
+- Everything that requires an account, and every email the app sends - the
+  allowlist is enforced on recipients too.
+
+#### Optional: putting Cloudflare Access back in front of the origin
+
+1. Zero Trust → Access → Applications → *Add* → *Self-hosted*, hostname
+   `scanmein.online`, exactly one policy: **Allow** → Include → **Emails** = your
+   allowlist (or *Emails ending in* a domain), login method **One-time PIN**.
+   Copy the application's **AUD** tag.
+2. Put `CF_ACCESS_MODE=on` and `CF_ACCESS_AUD=<the AUD tag>` in `.env` (and
+   `CF_ACCESS_TEAM_DOMAIN`, if it is no longer there), then `make up-aws`.
+3. **Do it in that order.** Creating the application first is what makes the
+   switch seamless; if Caddy starts demanding a token before the application
+   that issues it exists, every request is a `401`.
+
+Once it is on, `caddy/access-on.caddy` verifies each request's
 `Cf-Access-Jwt-Assertion` header (or `CF_Authorization` cookie) against your
 team's published keys at
-`https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`. Two details worth
-knowing:
+`https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`, using the `jwtauth`
+directive from [`ggicci/caddy-jwt`](https://github.com/ggicci/caddy-jwt)
+compiled into the custom image by `caddy.Dockerfile`. Two details worth knowing:
 
 - The check runs **before** any routing, so the SPA, `/api/*`, `/swagger-ui` and
   `/v3/api-docs` are all protected - not just the API.
@@ -366,30 +445,39 @@ identity.
 > `CF_ACCESS_AUD` does not match the application that issued the token, every
 > request gets a `401` (and Caddy may refuse to start at all). `docker compose
 > logs caddy` says why - look for `invalid token`, `invalid audience` or a JWKS
-> fetch error. While debugging you can take the check out of the path with
-> `CF_ACCESS_MODE=off` in `.env` followed by `make up-aws`; layers 1-3 still
-> apply, but do not leave it off on a public deployment.
+> fetch error. Do not leave `CF_ACCESS_MODE=on` unless an Access application is
+> actually in front of the site; `CF_ACCESS_MODE=off` with no application is the
+> supported public configuration.
 
-**Opening the site to the public later** takes two steps and no downtime: widen
-or disable the Access policy in the dashboard, set `CF_ACCESS_MODE=off` in
-`.env`, and run `make up-aws`. Because the certificate is obtained via DNS-01 and
-stored on the origin, none of this changes TLS or DNS.
+#### Going public again
 
-> If you ever prefer the classic design - a public A record with 443 open instead
-> of a tunnel - layers 1 and 2 change but layer 4 becomes essential: restrict
-> `443/tcp` to Cloudflare's published ranges
+Put `CF_ACCESS_MODE=off` in `.env` and run `make up-aws`, then delete the Access
+application in the dashboard - or replace its policy with a **Bypass** policy
+that includes *Everyone*, which keeps the application and its AUD intact and
+makes the next switch a single-line change. Leaving `CF_ACCESS_TEAM_DOMAIN` and
+`CF_ACCESS_AUD` in `.env` costs nothing while the mode is `off`. Because the
+certificate is obtained via DNS-01 and stored on the origin, none of this
+touches TLS or DNS.
+
+> If you ever prefer the classic design - a public A record with 443 open
+> instead of a tunnel - the network layers change and the origin is no longer
+> hidden, so you must restrict `443/tcp` to Cloudflare's published ranges
 > (`curl https://api.cloudflare.com/client/v4/ips`, and re-check it
-> occasionally), set `CADDY_BIND_ADDR=0.0.0.0`, and keep `CF_ACCESS_MODE=on` so a
-> request arriving through somebody else's Cloudflare zone is still rejected.
+> occasionally), set `CADDY_BIND_ADDR=0.0.0.0`, and either re-enable Cloudflare
+> Access (above) or add a WAF rule - otherwise anyone who learns the IP address
+> reaches the site directly.
 
 ### Generating `.env` on the EC2 instance
 
 Run this **on the instance**, from the repository root. `scripts/init-secrets.sh`
 detects that it is running on EC2 and therefore refuses to use `hostname -f`
 (which there yields an internal name such as
-`ip-172-31-8-42.us-east-2.compute.internal`), defaults to `TLS_MODE=public`,
-`CADDY_BIND_ADDR=127.0.0.1` and `CF_ACCESS_MODE=on`, and generates fresh database
-and application secrets:
+`ip-172-31-8-42.us-east-2.compute.internal`), defaults to `TLS_MODE=public` and
+`CADDY_BIND_ADDR=127.0.0.1`, and generates fresh database and application
+secrets. It still **defaults to `CF_ACCESS_MODE=on`**, because that is the safer
+default for a brand-new deployment - with no Access application and no origin
+check, registration is open to anyone who finds the hostname. For the public
+site documented here, pass `--cf-access-mode off`:
 
 ```
 ./scripts/init-secrets.sh \
@@ -397,14 +485,17 @@ and application secrets:
     --acme-email dev@scanmein.online \
     --cloudflare-api-token <zone-read + dns-edit token> \
     --tunnel-token <cloudflared token> \
-    --cf-access-team-domain <team>.cloudflareaccess.com \
-    --cf-access-aud <application AUD tag> \
+    --cf-access-mode off \
     --allowed-emails you@example.com,friend@example.com \
     --mail-from noreply@scanmein.online \
     --smtp-host email-smtp.<region>.amazonaws.com \
     --smtp-username <SES SMTP username> \
     --smtp-password <SES SMTP password>
 ```
+
+Pass `--cf-access-mode on`, `--cf-access-team-domain <team>.cloudflareaccess.com`
+and `--cf-access-aud <application AUD tag>` instead if you want Cloudflare Access
+in front of the site.
 
 Every flag can also be given as an environment variable named like the `.env` key
 it sets (handy for secrets you would rather not keep in your shell history), and
@@ -419,7 +510,9 @@ FRONTEND_BASE_URL=https://scanmein.online
 TLS_MODE=public
 CADDY_BIND_ADDR=127.0.0.1
 TUNNEL_TOKEN=<cloudflared token>
-CF_ACCESS_MODE=on
+CF_ACCESS_MODE=off
+# Only read while CF_ACCESS_MODE=on. Kept so Access can be switched back on
+# without regenerating this file.
 CF_ACCESS_TEAM_DOMAIN=<team>.cloudflareaccess.com
 CF_ACCESS_AUD=<application AUD tag>
 ACME_EMAIL=dev@scanmein.online
@@ -479,37 +572,48 @@ sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
-### Verifying the lockdown
+### Verifying the deployment
 
 From a machine that is **not** on your allowlist:
 
 ```
-# 1. The site is only reachable through the Cloudflare Access login:
-curl -sI https://scanmein.online | head -1     # 302 -> <team>.cloudflareaccess.com
+# 1. The site is public: no Cloudflare Access login redirect.
+curl -sI https://scanmein.online | head -1     # 200 (NOT 302 -> <team>.cloudflareaccess.com)
 
-# 2. The raw IP address leads nowhere (no inbound 80/443 exists at all):
+# 2. The API documentation is not published:
+curl -s -o /dev/null -w '%{http_code}\n' https://scanmein.online/swagger-ui/index.html   # 404
+curl -s -o /dev/null -w '%{http_code}\n' https://scanmein.online/v3/api-docs             # 404
+
+# 3. The app-level allowlist - not the network - is what stops strangers:
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://scanmein.online/api/v1/event-hosts \
+  -H 'Content-Type: application/json' \
+  -d '{"firstName":"Eve","lastName":"Tester","email":"eve@not-on-the-list.com",
+       "password":"a-very-strong-passphrase-42","dateOfBirth":"1995-01-01"}'            # 403
+
+# 4. The raw IP address leads nowhere (no inbound 80/443 exists at all):
 curl -sS -m 5 -k https://<instance-ip>/        # timed out / connection refused
 
-# 3. SSH refuses everything but a public key (use whichever user you hardened):
+# 5. SSH refuses everything but a public key (use whichever user you hardened):
 ssh -o BatchMode=yes ubuntu@<instance-ip>      # Permission denied (publickey)
 ```
 
-From the instance itself, to prove layer 4 independently of the network path - a
-request straight to Caddy that carries no Access JWT must be rejected:
+From the instance itself, confirm that the allowlist actually reached the running
+backend, and that the origin no longer demands an Access JWT:
 
 ```
+docker compose exec backend printenv ALLOWED_EMAIL_DOMAINS    # must print the list
+
 curl -s -o /dev/null -w '%{http_code}\n' -k \
      --resolve scanmein.online:443:127.0.0.1 https://scanmein.online/api/v1/events
-# 401
-docker compose logs caddy | tail -5            # "invalid token" / no JWT found
+# anything EXCEPT 401 - a 401 here means Caddy still expects an Access JWT
 ```
 
-After you log in through Access in a browser, the same request carries the
-`Cf-Access-Jwt-Assertion` header that Cloudflare signed and succeeds.
+Finally, register a throwaway **allowlisted** address in the browser and confirm
+that the verification email actually arrives (see the Amazon SES note above).
 
 ## Troubleshooting: Bad Gateway (502) - a duplicate tunnel connector
 
-**Symptom.** Requests through Cloudflare Access fail *intermittently* with a
+**Symptom.** Requests through Cloudflare fail *intermittently* with a
 `502 Bad Gateway` page: some load the site, others do not, and a retry may
 succeed. `make status` shows all five containers running, and - the giveaway -
 `docker compose logs caddy frontend backend` show **no request at all** for the
@@ -597,7 +701,7 @@ verbose logging cannot fill the volume.
 
 ## Troubleshooting: If the page is blank after a rebuild (cached assets)
 
-**Symptom.** The site loads through Cloudflare Access (the certificate is fine
+**Symptom.** The site loads through Cloudflare (the certificate is fine
 and `make status` shows five running containers), but the page stays blank and
 the browser console reports:
 
