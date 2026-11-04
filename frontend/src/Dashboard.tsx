@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext.tsx';
 
@@ -52,21 +52,15 @@ interface EventInfo {
  * @returns JSX for the site's dashboard
  */
 export function Dashboard() {
-    // TODO: Add a search bar to let the user filter
-    //       the visible events by their name.
-
-    // TODO: Write logic to filter the visible events by name.
-    //       - When the search bar is empty, just show
-    //       all events created by the user.
-    //       - When the search bar is not empty, show
-    //       all events where the search bar's contents
-    //       appears as a substring in the event's name.
     const { isLoggedIn, authFetch } = useAuth();
     const navigate = useNavigate();
 
     const [events, setEvents] = useState<EventInfo[]>([]);
     const [isLoadingEvents, setIsLoadingEvents] = useState(true);
     const [eventsError, setEventsError] = useState('');
+    // Text the user typed into the "Search Events" box. Used to filter
+    // the visible events by name (case-insensitive substring match).
+    const [searchQuery, setSearchQuery] = useState('');
     // Message showing the result of a PATCH /api/v1/events/status request
     // (i.e. publishing or canceling an event from the actions menu).
     const [statusUpdateMessage, setStatusUpdateMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -105,6 +99,19 @@ export function Dashboard() {
 
         fetchEvents();
     }, [isLoggedIn, authFetch]);
+
+    // The events to actually render. When the search box is empty (or only
+    // contains whitespace), every event is shown; otherwise only the events
+    // whose name contains the search text (ignoring case) are shown. The
+    // filtering is done client-side because GET /api/v1/events only supports
+    // the "count" query parameter and cannot search by name.
+    const visibleEvents = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        if (query === '') {
+            return events;
+        }
+        return events.filter((event) => event.name.toLowerCase().includes(query));
+    }, [events, searchQuery]);
 
     /**
      * Updates the eventStatus of the event with the given public ID in the
@@ -176,6 +183,22 @@ export function Dashboard() {
                 <section className="dashboard__section">
                     <h2 className="dashboard__section-title">Your Events</h2>
 
+                    <div className="dashboard__search">
+                        <label className="form-label" htmlFor="event-search">
+                            Search Events
+                        </label>
+                        <input
+                            id="event-search"
+                            type="search"
+                            className="form-input"
+                            placeholder="Search events by name..."
+                            value={searchQuery}
+                            onChange={(changeEvent) => setSearchQuery(changeEvent.target.value)}
+                            autoComplete="off"
+                            disabled={isLoadingEvents || eventsError !== ''}
+                        />
+                    </div>
+
                     {statusUpdateMessage && (
                         <div
                             className={`alert ${statusUpdateMessage.type === 'success' ? 'alert--success' : 'alert--error'}`}
@@ -204,9 +227,15 @@ export function Dashboard() {
                         </div>
                     )}
 
-                    {!isLoadingEvents && !eventsError && events.length > 0 && (
+                    {!isLoadingEvents && !eventsError && events.length > 0 && visibleEvents.length === 0 && (
+                        <div className="dashboard__empty">
+                            <p>No events match your search.</p>
+                        </div>
+                    )}
+
+                    {!isLoadingEvents && !eventsError && visibleEvents.length > 0 && (
                         <div>
-                            {events.map((event) => {
+                            {visibleEvents.map((event) => {
                                 const statusBadge = getEventStatusBadge(event.eventStatus);
                                 return (
                                     <div key={event.publicId} className="profile__field">
