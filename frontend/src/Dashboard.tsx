@@ -52,6 +52,15 @@ interface EventInfo {
  * @returns JSX for the site's dashboard
  */
 export function Dashboard() {
+    // TODO: Add a search bar to let the user filter
+    //       the visible events by their name.
+
+    // TODO: Write logic to filter the visible events by name.
+    //       - When the search bar is empty, just show
+    //       all events created by the user.
+    //       - When the search bar is not empty, show
+    //       all events where the search bar's contents
+    //       appears as a substring in the event's name.
     const { isLoggedIn, authFetch } = useAuth();
     const navigate = useNavigate();
 
