@@ -248,7 +248,7 @@ services:
     profiles: ["tunnel"]
     # Version pinned (like mariadb and mailpit above) so rebuilds are
     # reproducible; --no-autoupdate keeps the connector on exactly this version.
-    image: cloudflare/cloudflared:2026.9.1
+    image: cloudflare/cloudflared:2026.10.3
     container_name: ticketproject-cloudflared
     restart: unless-stopped
     logging: *default-logging
