@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext.tsx';
 
@@ -22,21 +22,15 @@ interface ScannedTicketInfo {
  * @returns JSX for the site's view scanned tickets page
  */
 export function ViewScannedTicketsPage() {
-    // TODO: Add a search bar to let the user filter scanned tickets by event name.
-
-    // TODO: Add a header near the search bar that says "Search By Event Name".
-
-    // TODO: Add logic to filter scanned tickets by event name.
-    //       - When the search bar is empty (or only
-    //         contains whitespace), show every scanned ticket.
-    //       - Otherwise, show only the scanned tickets whose
-    //         event name contains the search text (ignoring case).
     const { isLoggedIn, authFetch } = useAuth();
     const navigate = useNavigate();
 
     const [scannedTickets, setScannedTickets] = useState<ScannedTicketInfo[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
+    // Text the user typed into the "Search By Event Name" box. Used to filter
+    // the visible scanned tickets by event name (case-insensitive substring match).
+    const [searchQuery, setSearchQuery] = useState('');
 
     // If the user is not logged in, redirect to the home page.
     useEffect(() => {
@@ -77,6 +71,19 @@ export function ViewScannedTicketsPage() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isLoggedIn]);
+
+    // The scanned tickets to actually render. When the search box is empty (or only
+    // contains whitespace), every scanned ticket is shown; otherwise only the
+    // scanned tickets whose event name contains the search text (ignoring case) are
+    // shown. The filtering is done client-side because GET /api/v1/ticket-scans
+    // has no query parameter for searching by event name.
+    const visibleScannedTickets = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        if (query === '') {
+            return scannedTickets;
+        }
+        return scannedTickets.filter((ticket) => ticket.eventName.toLowerCase().includes(query));
+    }, [scannedTickets, searchQuery]);
 
     /**
      * Formats an ISO date-time string into a human-readable format.
@@ -135,13 +142,36 @@ export function ViewScannedTicketsPage() {
                     </Link>
                 </div>
 
-                {scannedTickets.length === 0 ? (
+                <div className="scanned-tickets__search">
+                    <label className="form-label" htmlFor="scanned-ticket-search">
+                        Search By Event Name
+                    </label>
+                    <input
+                        id="scanned-ticket-search"
+                        type="search"
+                        className="form-input"
+                        placeholder="Search scanned tickets by event name..."
+                        value={searchQuery}
+                        onChange={(changeEvent) => setSearchQuery(changeEvent.target.value)}
+                        autoComplete="off"
+                    />
+                </div>
+
+                {scannedTickets.length === 0 && (
                     <div className="dashboard__empty">
                         <p>You haven't scanned any tickets yet.</p>
                     </div>
-                ) : (
+                )}
+
+                {scannedTickets.length > 0 && visibleScannedTickets.length === 0 && (
+                    <div className="dashboard__empty">
+                        <p>No scanned tickets match your search.</p>
+                    </div>
+                )}
+
+                {visibleScannedTickets.length > 0 && (
                     <div className="scanned-tickets__list">
-                        {scannedTickets.map((ticket, index) => (
+                        {visibleScannedTickets.map((ticket, index) => (
                             <div key={index} className="ticket-card">
                                 <div className="ticket-card__top">
                                     <div className="ticket-card__attendee">

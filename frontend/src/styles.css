@@ -967,6 +967,11 @@ textarea.form-input {
     font-size: var(--font-size-2xl);
 }
 
+.scanned-tickets__search {
+    max-width: 420px;
+    margin-bottom: var(--space-lg);
+}
+
 .scanned-tickets__list {
     display: flex;
     flex-direction: column;
