@@ -22,6 +22,15 @@ interface ScannedTicketInfo {
  * @returns JSX for the site's view scanned tickets page
  */
 export function ViewScannedTicketsPage() {
+    // TODO: Add a search bar to let the user filter scanned tickets by event name.
+
+    // TODO: Add a header near the search bar that says "Search By Event Name".
+
+    // TODO: Add logic to filter scanned tickets by event name.
+    //       - When the search bar is empty (or only
+    //         contains whitespace), show every scanned ticket.
+    //       - Otherwise, show only the scanned tickets whose
+    //         event name contains the search text (ignoring case).
     const { isLoggedIn, authFetch } = useAuth();
     const navigate = useNavigate();
 
