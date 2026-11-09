@@ -487,5 +487,114 @@ class TicketScanControllerTest
                 .andExpect(jsonPath("$.scannedTickets[0].eventStartDateTime").exists())
                 .andExpect(jsonPath("$.scannedTickets[0].eventEndDateTime").exists());
         }
+
+        @Test
+        @DisplayName("Retrieval for an event whose tickets have not been scanned returns 200 with an empty list")
+        void retrievalForUnscannedEventReturns200() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PUBLIC);
+            Attendee attendee = createAttendee();
+            createTicket(event, attendee);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            mockMvc.perform(get(BASE_PATH + "/" + event.getPublicId())
+                    .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scannedTickets").isArray())
+                .andExpect(jsonPath("$.scannedTickets.length()").value(0));
+        }
+
+        @Test
+        @DisplayName("Retrieval only returns tickets scanned for the requested event")
+        void retrievalOnlyReturnsScansForRequestedEvent() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event firstEvent = createEvent(host, EventType.PUBLIC);
+            Event secondEvent = createEvent(host, EventType.PUBLIC);
+
+            Attendee jon = createAttendee();
+            Attendee jane = createAttendee("Jane", "Doe", "jane@example.com");
+            Attendee bob = createAttendee("Bob", "Brown", "bob@example.com");
+
+            Ticket jonTicket = createTicket(firstEvent, jon);
+            Ticket janeTicket = createTicket(firstEvent, jane);
+            Ticket bobTicket = createTicket(secondEvent, bob);
+
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            // Scan both tickets of the first event, and the only ticket of the second event.
+            scanTicket(jwt, jonTicket);
+            scanTicket(jwt, janeTicket);
+            scanTicket(jwt, bobTicket);
+
+            // The first event's scan history must only contain its own two tickets.
+            mockMvc.perform(get(BASE_PATH + "/" + firstEvent.getPublicId())
+                    .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scannedTickets").isArray())
+                .andExpect(jsonPath("$.scannedTickets.length()").value(2))
+                .andExpect(jsonPath("$.scannedTickets[*].attendeeEmail").value(
+                    containsInAnyOrder("jon@example.com", "jane@example.com")));
+
+            // The second event's scan history must only contain its own single ticket.
+            mockMvc.perform(get(BASE_PATH + "/" + secondEvent.getPublicId())
+                    .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scannedTickets").isArray())
+                .andExpect(jsonPath("$.scannedTickets.length()").value(1))
+                .andExpect(jsonPath("$.scannedTickets[0].attendeeEmail").value("bob@example.com"));
+        }
+
+        @Test
+        @DisplayName("Retrieval of tickets scanned for an event without JWT returns 401")
+        void retrievalWithoutJwtReturns401() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PUBLIC);
+
+            mockMvc.perform(get(BASE_PATH + "/" + event.getPublicId()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+        }
+
+        @Test
+        @DisplayName("Retrieval of tickets scanned for an event with invalid JWT returns 401")
+        void retrievalWithInvalidJwtReturns401() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PUBLIC);
+
+            mockMvc.perform(get(BASE_PATH + "/" + event.getPublicId())
+                    .header("Authorization", "Bearer invalid.jwt.token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401));
+        }
+
+        @Test
+        @DisplayName("Retrieval of tickets scanned for a non-existent event returns 404")
+        void nonExistentEventReturns404() throws Exception
+        {
+            createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            mockMvc.perform(get(BASE_PATH + "/" + UUID.randomUUID().toString())
+                    .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+        }
+
+        @Test
+        @DisplayName("Retrieval with an event public id longer than 36 characters returns 400")
+        void publicIdTooLongReturns400() throws Exception
+        {
+            createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            mockMvc.perform(get(BASE_PATH + "/" + "a".repeat(37))
+                    .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        }
     }
 }
