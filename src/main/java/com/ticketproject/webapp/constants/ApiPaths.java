@@ -121,6 +121,7 @@ public final class ApiPaths
         }
 
         public static final String ROOT = "/ticket-scans";
+        public static final String BY_EVENT_PUBLIC_ID = "/{publicId}";
     }
 
     public static final class Tickets

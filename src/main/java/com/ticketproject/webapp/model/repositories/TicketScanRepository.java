@@ -23,4 +23,13 @@ public interface TicketScanRepository extends JpaRepository<TicketScan, Long>
      */
     @Query("SELECT s FROM TicketScan s JOIN FETCH s.ticket WHERE s.scannedBy.id = :eventHostId")
     List<TicketScan> findAllByEventHostId(@Param("eventHostId") Long eventHostId);
+
+    /**
+     * Find and return all TicketScan entities associated with
+     * a given Event using the Event's public ID.
+     * @param publicId the Event's public ID
+     * @return a List<TicketScan>
+     */
+    @Query("SELECT s FROM TicketScan s JOIN FETCH s.ticket WHERE s.ticket.event.publicId = :publicId")
+    List<TicketScan> findAllByEventPublicId(@Param("publicId") String publicId);
 }

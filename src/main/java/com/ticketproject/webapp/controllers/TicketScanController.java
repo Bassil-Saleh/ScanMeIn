@@ -19,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.PathVariable;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -97,5 +98,39 @@ public class TicketScanController
             throw new UnauthorizedException("Authentication required");
         }
         return ticketScanService.getScannedTicketsByEventHost(eventHost);
+    }
+
+    /**
+     * Handles a request to let a logged in user retrieve a list of
+     * attendee tickets scanned for a specific event
+     * (identified by the event's public ID).
+     * @param publicId the event's public ID
+     * @param servletRequest the HTTP Servlet request
+     * @return a GetScannedTicketsByEventHostResponse on success
+     */
+    @Operation
+    (
+        summary = "Get tickets scanned for a specific event",
+        description =
+            "Retrieves a list of attendee tickets that have been " +
+            "scanned for an event (identified by its public ID). " +
+            "Includes details about each scanned ticket such as " +
+            "attendee information, event details, and scan timestamp. " +
+            "Requires authentication."
+    )
+    @GetMapping(ApiPaths.TicketScans.BY_EVENT_PUBLIC_ID)
+    @ResponseStatus(HttpStatus.OK)
+    public GetScannedTicketsByEventHostResponse getScannedTicketsByEventPublicId
+    (
+        @PathVariable String publicId,
+        HttpServletRequest servletRequest
+    )
+    {
+        EventHost eventHost = (EventHost) servletRequest.getAttribute(AppConstants.Jwt.Filter.AUTHENTICATED_EVENT_HOST_ATTRIBUTE);
+        if (eventHost == null)
+        {
+            throw new UnauthorizedException("Authentication required");
+        }
+        return ticketScanService.getScannedTicketsByEventPublicId(eventHost, publicId);
     }
 }
