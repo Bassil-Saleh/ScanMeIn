@@ -36,6 +36,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -153,10 +154,23 @@ class TicketScanControllerTest
 
     private Attendee createAttendee()
     {
+        return createAttendee("Jon", "Smith", "jon@example.com");
+    }
+
+    /**
+     * Creates and persists an Attendee with the given details.
+     *
+     * @param firstName the attendee's first name
+     * @param lastName the attendee's last name
+     * @param email the attendee's email address
+     * @return the persisted Attendee entity
+     */
+    private Attendee createAttendee(String firstName, String lastName, String email)
+    {
         Attendee attendee = new Attendee.Builder()
-            .firstName("Jon")
-            .lastName("Smith")
-            .email("jon@example.com")
+            .firstName(firstName)
+            .lastName(lastName)
+            .email(email)
             .build();
 
         return attendeeRepository.save(attendee);
@@ -204,6 +218,28 @@ class TicketScanControllerTest
         int jwtStart = responseBody.indexOf("\"jwt\":\"") + 7;
         int jwtEnd = responseBody.indexOf("\"", jwtStart);
         return responseBody.substring(jwtStart, jwtEnd);
+    }
+
+    /**
+     * Scans a ticket through the POST /api/v1/ticket-scans API route.
+     *
+     * @param jwt the JWT of the event host performing the scan
+     * @param ticket the ticket to scan
+     * @throws Exception if the request fails
+     */
+    private void scanTicket(String jwt, Ticket ticket) throws Exception
+    {
+        String requestBody = """
+            {
+                "publicToken": "%s"
+            }
+            """.formatted(ticket.getPublicToken());
+
+        mockMvc.perform(post(BASE_PATH)
+                .header("Authorization", "Bearer " + jwt)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+            .andExpect(status().isCreated());
     }
 
     @Nested
@@ -413,6 +449,43 @@ class TicketScanControllerTest
                     .header("Authorization", "Bearer invalid.jwt.token"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.status").value(401));
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /api/v1/ticket-scans/{publicId}")
+    class GetScannedTicketsByEventPublicIdTests
+    {
+        @Test
+        @DisplayName("Successful retrieval of tickets scanned for an event returns 200")
+        void successfulRetrievalReturns200() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PUBLIC);
+            Attendee attendee = createAttendee("Jon", "Smith", "jon@example.com");
+            attendee.setMiddleName("Marie");
+            attendeeRepository.save(attendee);
+            Ticket ticket = createTicket(event, attendee);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            // First scan the ticket.
+            scanTicket(jwt, ticket);
+
+            // Then retrieve the tickets scanned for the event.
+            mockMvc.perform(get(BASE_PATH + "/" + event.getPublicId())
+                    .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scannedTickets").isArray())
+                .andExpect(jsonPath("$.scannedTickets.length()").value(1))
+                .andExpect(jsonPath("$.scannedTickets[0].attendeeFirstName").value("Jon"))
+                .andExpect(jsonPath("$.scannedTickets[0].attendeeMiddleName").value("Marie"))
+                .andExpect(jsonPath("$.scannedTickets[0].attendeeLastName").value("Smith"))
+                .andExpect(jsonPath("$.scannedTickets[0].attendeeEmail").value("jon@example.com"))
+                .andExpect(jsonPath("$.scannedTickets[0].eventName").value("Test Event"))
+                .andExpect(jsonPath("$.scannedTickets[0].eventDescription").value("A test event description"))
+                .andExpect(jsonPath("$.scannedTickets[0].scannedAt").exists())
+                .andExpect(jsonPath("$.scannedTickets[0].eventStartDateTime").exists())
+                .andExpect(jsonPath("$.scannedTickets[0].eventEndDateTime").exists());
         }
     }
 }
