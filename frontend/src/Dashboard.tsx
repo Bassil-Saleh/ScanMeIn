@@ -52,9 +52,6 @@ interface EventInfo {
  * @returns JSX for the site's dashboard
  */
 export function Dashboard() {
-    // TODO: Remove the "Scanned Tickets" button from the Dashboard,
-    //       since the EventActionsMenu will now include a link
-    //       to the "View Scanned Tickets" page for each listed event.
     const { isLoggedIn, authFetch } = useAuth();
     const navigate = useNavigate();
 
@@ -177,9 +174,6 @@ export function Dashboard() {
                     <Link to="/create-event" className="dashboard__nav-link">
                         ➕ Create Event
                     </Link>
-                    <Link to="/scanned-tickets" className="dashboard__nav-link">
-                        🎫 Scanned Tickets
-                    </Link>
                 </nav>
 
                 {/* Events section */}
@@ -281,18 +275,16 @@ interface EventActionsMenuProps {
 /**
  * EventActionsMenu is a drop-down menu providing the actions available
  * for a single event on the dashboard: viewing the event, editing the
- * event, managing the event's registrations, creating an invitation for
- * private events, publishing the event, and canceling the event. Publishing
- * and canceling each open a confirmation dialog before sending a request to
- * PATCH /api/v1/events/status. The menu is closed when the user clicks
- * outside of it or presses the Escape key.
+ * event, managing the event's registrations, viewing the tickets scanned
+ * for the event, creating an invitation for private events, publishing
+ * the event, and canceling the event.
+ * Publishing and canceling each open a confirmation dialog before
+ * sending a request to PATCH /api/v1/events/status. The menu is closed
+ * when the user clicks outside of it or presses the Escape key.
  * @param props the component's props
  * @returns JSX for the event's actions drop-down menu
  */
 function EventActionsMenu({ event, onStatusChange, onStatusError }: EventActionsMenuProps) {
-    // TODO: Add a "Scanned Tickets" option to EventActionsMenu.
-    //       - Clicking "Scanned Tickets" should take the user
-    //         to the "View Scanned Tickets" page.
     const { authFetch } = useAuth();
 
     const [isOpen, setIsOpen] = useState(false);
@@ -400,6 +392,14 @@ function EventActionsMenu({ event, onStatusChange, onStatusError }: EventActions
                         onClick={() => setIsOpen(false)}
                     >
                         Manage Registrations
+                    </Link>
+                    <Link
+                        to={`/events/${event.publicId}/scanned-tickets`}
+                        className="dashboard__event-menu__item"
+                        role="menuitem"
+                        onClick={() => setIsOpen(false)}
+                    >
+                        Scanned Tickets
                     </Link>
                     {event.eventType === 'PRIVATE' && (
                         <Link

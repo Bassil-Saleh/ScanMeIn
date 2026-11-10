@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from './AuthContext.tsx';
 
-/** Shape of a single scanned ticket returned by GET /api/v1/ticket-scans. */
+/** Shape of a single scanned ticket returned by GET /api/v1/ticket-scans/{publicId}. */
 interface ScannedTicketInfo {
     scannedAt: string;
     attendeeFirstName: string;
@@ -18,24 +18,18 @@ interface ScannedTicketInfo {
 /**
  * ViewScannedTicketsPage is for implementing the page
  * that lets a logged in event host view a list of tickets
- * they've scanned ever since they first created their account.
+ * scanned for one of their events (identified by the event's
+ * public ID in the URL).
  * @returns JSX for the site's view scanned tickets page
  */
 export function ViewScannedTicketsPage() {
-    // TODO: Instead of using the API route GET /api/v1/ticket-scans,
-    //       use the API route GET /api/v1/ticket-scans/{publicId}
-    //       so that the page fetches scanned tickets for
-    //       a specific event (instead of every ticket
-    //       scanned by the logged in event host).
     const { isLoggedIn, authFetch } = useAuth();
     const navigate = useNavigate();
+    const { publicId } = useParams<{ publicId: string }>();
 
     const [scannedTickets, setScannedTickets] = useState<ScannedTicketInfo[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
-    // Text the user typed into the "Search By Event Name" box. Used to filter
-    // the visible scanned tickets by event name (case-insensitive substring match).
-    const [searchQuery, setSearchQuery] = useState('');
 
     // If the user is not logged in, redirect to the home page.
     useEffect(() => {
@@ -45,16 +39,23 @@ export function ViewScannedTicketsPage() {
     }, [isLoggedIn, navigate]);
 
     /**
-     * Fetches the list of tickets scanned by the logged in
-     * event host from GET /api/v1/ticket-scans.
+     * Fetches the list of tickets scanned for the event with the given
+     * public ID from GET /api/v1/ticket-scans/{publicId}.
      */
     const fetchScannedTickets = async () => {
+        if (!publicId) {
+            setIsLoading(false);
+            setLoadError('No event was specified, so its scanned tickets cannot be loaded.');
+            return;
+        }
+
         setIsLoading(true);
         setLoadError('');
         try {
-            const response = await authFetch('/api/v1/ticket-scans', {
-                method: 'GET',
-            });
+            const response = await authFetch(
+                `/api/v1/ticket-scans/${encodeURIComponent(publicId)}`,
+                { method: 'GET' }
+            );
             const data = await response.json();
 
             if (response.ok && data.scannedTickets) {
@@ -69,26 +70,13 @@ export function ViewScannedTicketsPage() {
         }
     };
 
-    // Fetch scanned tickets on mount.
+    // Fetch the event's scanned tickets on mount, and whenever the event changes.
     useEffect(() => {
         if (isLoggedIn) {
             fetchScannedTickets();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isLoggedIn]);
-
-    // The scanned tickets to actually render. When the search box is empty (or only
-    // contains whitespace), every scanned ticket is shown; otherwise only the
-    // scanned tickets whose event name contains the search text (ignoring case) are
-    // shown. The filtering is done client-side because GET /api/v1/ticket-scans
-    // has no query parameter for searching by event name.
-    const visibleScannedTickets = useMemo(() => {
-        const query = searchQuery.trim().toLowerCase();
-        if (query === '') {
-            return scannedTickets;
-        }
-        return scannedTickets.filter((ticket) => ticket.eventName.toLowerCase().includes(query));
-    }, [scannedTickets, searchQuery]);
+    }, [isLoggedIn, publicId]);
 
     /**
      * Formats an ISO date-time string into a human-readable format.
@@ -147,37 +135,19 @@ export function ViewScannedTicketsPage() {
                     </Link>
                 </div>
 
-                <div className="scanned-tickets__search">
-                    <label className="form-label" htmlFor="scanned-ticket-search">
-                        Search By Event Name
-                    </label>
-                    <input
-                        id="scanned-ticket-search"
-                        type="search"
-                        className="form-input"
-                        placeholder="Search scanned tickets by event name..."
-                        value={searchQuery}
-                        onChange={(changeEvent) => setSearchQuery(changeEvent.target.value)}
-                        autoComplete="off"
-                    />
-                </div>
-
                 {scannedTickets.length === 0 && (
                     <div className="dashboard__empty">
-                        <p>You haven't scanned any tickets yet.</p>
+                        <p>No tickets have been scanned for this event yet.</p>
                     </div>
                 )}
 
-                {scannedTickets.length > 0 && visibleScannedTickets.length === 0 && (
-                    <div className="dashboard__empty">
-                        <p>No scanned tickets match your search.</p>
-                    </div>
-                )}
-
-                {visibleScannedTickets.length > 0 && (
+                {scannedTickets.length > 0 && (
                     <div className="scanned-tickets__list">
-                        {visibleScannedTickets.map((ticket, index) => (
-                            <div key={index} className="ticket-card">
+                        {scannedTickets.map((ticket) => (
+                            <div
+                                key={`${ticket.attendeeEmail}-${ticket.scannedAt}`}
+                                className="ticket-card"
+                            >
                                 <div className="ticket-card__top">
                                     <div className="ticket-card__attendee">
                                         <span className="ticket-card__name">

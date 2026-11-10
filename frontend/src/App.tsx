@@ -27,11 +27,6 @@ import { ManageEventRegistrationsPage } from './ManageEventRegistrationsPage.tsx
  * @returns JSX for the application's route tree.
  */
 function App() {
-  // TODO: Update the route path to ViewScannedTicketsPage to use
-  //       a :publicId parameter, so that the API route
-  //       GET /api/v1/ticket-scans/{publicId} can fetch
-  //       scanned tickets for a specific event
-  //       using the event's public ID.
   return (
     <div>
       <NavigationBar />
@@ -45,7 +40,6 @@ function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/verify-account" element={<AccountVerificationPage />} />
         <Route path="/create-event" element={<CreateEventPage />} />
-        <Route path="/scanned-tickets" element={<ViewScannedTicketsPage />} />
         <Route path="/scan-tickets" element={<ScanTicketPage />} />
         <Route path="/delete-account" element={<DeleteAccountPage />} />
         <Route path="/events/:publicId" element={<ViewEventPage />} />
@@ -53,6 +47,7 @@ function App() {
         <Route path="/events/:publicId/invite" element={<CreateInvitationPage />} />
         <Route path="/events/:publicId/edit" element={<EditEventPage />} />
         <Route path="/events/:publicId/registrations" element={<ManageEventRegistrationsPage />} />
+        <Route path="/events/:publicId/scanned-tickets" element={<ViewScannedTicketsPage />} />
         <Route path="/respond-to-invitation" element={<InvitationResponsePage />} />
       </Routes>
       <Footer />

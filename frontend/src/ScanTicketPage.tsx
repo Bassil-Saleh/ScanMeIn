@@ -347,9 +347,6 @@ export function ScanTicketPage() {
                 <div className="scan-ticket__header">
                     <h1 className="scan-ticket__title">Scan Tickets</h1>
                     <div className="scan-ticket__nav-actions">
-                        <Link to="/scanned-tickets" className="btn btn--outline btn--sm">
-                            🎫 View Scanned Tickets
-                        </Link>
                         <Link to="/dashboard" className="btn btn--ghost btn--sm">
                             ← Back to Dashboard
                         </Link>
