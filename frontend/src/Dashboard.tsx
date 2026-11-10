@@ -52,6 +52,9 @@ interface EventInfo {
  * @returns JSX for the site's dashboard
  */
 export function Dashboard() {
+    // TODO: Remove the "Scanned Tickets" button from the Dashboard,
+    //       since the EventActionsMenu will now include a link
+    //       to the "View Scanned Tickets" page for each listed event.
     const { isLoggedIn, authFetch } = useAuth();
     const navigate = useNavigate();
 
@@ -287,6 +290,9 @@ interface EventActionsMenuProps {
  * @returns JSX for the event's actions drop-down menu
  */
 function EventActionsMenu({ event, onStatusChange, onStatusError }: EventActionsMenuProps) {
+    // TODO: Add a "Scanned Tickets" option to EventActionsMenu.
+    //       - Clicking "Scanned Tickets" should take the user
+    //         to the "View Scanned Tickets" page.
     const { authFetch } = useAuth();
 
     const [isOpen, setIsOpen] = useState(false);

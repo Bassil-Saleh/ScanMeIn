@@ -27,6 +27,11 @@ import { ManageEventRegistrationsPage } from './ManageEventRegistrationsPage.tsx
  * @returns JSX for the application's route tree.
  */
 function App() {
+  // TODO: Update the route path to ViewScannedTicketsPage to use
+  //       a :publicId parameter, so that the API route
+  //       GET /api/v1/ticket-scans/{publicId} can fetch
+  //       scanned tickets for a specific event
+  //       using the event's public ID.
   return (
     <div>
       <NavigationBar />

@@ -22,6 +22,11 @@ interface ScannedTicketInfo {
  * @returns JSX for the site's view scanned tickets page
  */
 export function ViewScannedTicketsPage() {
+    // TODO: Instead of using the API route GET /api/v1/ticket-scans,
+    //       use the API route GET /api/v1/ticket-scans/{publicId}
+    //       so that the page fetches scanned tickets for
+    //       a specific event (instead of every ticket
+    //       scanned by the logged in event host).
     const { isLoggedIn, authFetch } = useAuth();
     const navigate = useNavigate();
 
