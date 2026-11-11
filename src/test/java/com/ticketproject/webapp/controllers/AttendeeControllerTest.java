@@ -1,17 +1,23 @@
 package com.ticketproject.webapp.controllers;
 
 import com.ticketproject.webapp.constants.ApiPaths;
+import com.ticketproject.webapp.constants.AppConstants;
+import com.ticketproject.webapp.model.entities.Attendee;
 import com.ticketproject.webapp.model.entities.Event;
 import com.ticketproject.webapp.model.entities.EventAddress;
 import com.ticketproject.webapp.model.entities.EventHost;
 import com.ticketproject.webapp.model.entities.EventSigningKey;
+import com.ticketproject.webapp.model.entities.Ticket;
 import com.ticketproject.webapp.model.enums.EventStatus;
 import com.ticketproject.webapp.model.enums.EventType;
 import com.ticketproject.webapp.model.enums.RegistrationStatus;
+import com.ticketproject.webapp.model.repositories.AttendeeRepository;
 import com.ticketproject.webapp.model.repositories.EventHostRepository;
 import com.ticketproject.webapp.model.repositories.EventRepository;
+import com.ticketproject.webapp.model.repositories.TicketRepository;
 import com.ticketproject.webapp.services.database.CryptoService;
 import com.ticketproject.webapp.services.email.EmailService;
+import com.ticketproject.webapp.services.model.TicketService;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -35,15 +41,18 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * AttendeeControllerTest contains integration tests for the
- * AttendeeController, covering public event registration routes.
+ * AttendeeController, covering public event registration, private
+ * event invitation, and ticket resend routes.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -60,11 +69,23 @@ class AttendeeControllerTest
     @Autowired
     private EventRepository eventRepository;
 
+    @Autowired
+    private TicketRepository ticketRepository;
+
+    @Autowired
+    private AttendeeRepository attendeeRepository;
+
+    @Autowired
+    private TicketService ticketService;
+
     @MockitoBean
     private EmailService emailService;
 
     private static final String BASE_PATH = ApiPaths.BASE + ApiPaths.Attendees.ROOT + ApiPaths.Attendees.REGISTRATION;
     private static final String INVITATION_PATH = ApiPaths.BASE + ApiPaths.Attendees.ROOT + ApiPaths.Attendees.INVITATION;
+    private static final String RESENDS_PATH = ApiPaths.BASE + ApiPaths.Attendees.ROOT + ApiPaths.Attendees.RESENDS;
+    private static final String RESEND_SUCCESS_MESSAGE =
+        "If a registration exists for that email address, then a ticket has been sent to it.";
     private static final String TEST_EMAIL = "attendeetest@example.com";
     private static final String TEST_PASSWORD = "securePassword123";
 
@@ -77,8 +98,10 @@ class AttendeeControllerTest
     @BeforeEach
     void setUp()
     {
+        ticketRepository.deleteAll();
         eventRepository.deleteAll();
         eventHostRepository.deleteAll();
+        attendeeRepository.deleteAll();
     }
 
     /**
@@ -253,6 +276,54 @@ class AttendeeControllerTest
                 "email": "%s"
             }
             """.formatted(publicId, firstName, lastName, email);
+    }
+
+    /**
+     * Creates and persists an Attendee with the given email address.
+     *
+     * @param email the attendee's email address
+     * @return the persisted Attendee entity
+     */
+    private Attendee createAttendee(String email)
+    {
+        Attendee attendee = new Attendee.Builder()
+            .firstName("Jon")
+            .lastName("Smith")
+            .email(email)
+            .build();
+
+        return attendeeRepository.save(attendee);
+    }
+
+    /**
+     * Creates and persists an active Ticket for the given event, registering
+     * the attendee identified by the given email address for that event.
+     *
+     * @param event the event the ticket belongs to
+     * @param email the attendee's email address
+     * @return the persisted Ticket entity
+     */
+    private Ticket createTicketForAttendee(Event event, String email)
+    {
+        Attendee attendee = createAttendee(email);
+        Ticket ticket = ticketService.createSignedTicket(event);
+        ticket.setAttendee(attendee);
+        return ticketRepository.save(ticket);
+    }
+
+    /**
+     * Builds a JSON request body for resending a ticket email.
+     *
+     * @param email the attendee's email address
+     * @return a JSON string representing the resend request
+     */
+    private String buildResendRequestBody(String email)
+    {
+        return """
+            {
+                "email": "%s"
+            }
+            """.formatted(email);
     }
 
     /**
@@ -695,6 +766,235 @@ class AttendeeControllerTest
                         event.getPublicId(), "Jane", "Smith", "not-an-email")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/v1/attendees/resends/{publicId}")
+    class ResendEventTicketEmailTests
+    {
+        @Test
+        @DisplayName("Successful resend without authentication returns 202 and sends the ticket email")
+        void successfulResendReturns202() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PUBLIC, RegistrationStatus.OPEN, 100);
+            Ticket ticket = createTicketForAttendee(event, "attendee@example.com");
+
+            mockMvc.perform(post(RESENDS_PATH + "/" + event.getPublicId())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildResendRequestBody("attendee@example.com")))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.message").value(RESEND_SUCCESS_MESSAGE));
+
+            // The ticket email must be resent to the attendee's email address
+            // and must reuse the public token of the attendee's existing ticket.
+            verify(emailService).sendTicketEmail
+            (
+                eq("attendee@example.com"),
+                eq(ticket.getPublicToken()),
+                eq(event.getName()),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class),
+                eq("Attendee Tester"),
+                eq("Test City"),
+                eq("Test State"),
+                eq("Test Country"),
+                eq("123 Test Street"),
+                isNull(),
+                eq("12345")
+            );
+
+            // Resending a ticket email must not create a second ticket.
+            assertThat(ticketRepository.getRegistrationCountByEventId(event.getId())).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("Resend is case-insensitive with respect to the attendee's email address")
+        void resendIsCaseInsensitiveForEmailAddress() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PUBLIC, RegistrationStatus.OPEN, 100);
+            Ticket ticket = createTicketForAttendee(event, "attendee@example.com");
+
+            mockMvc.perform(post(RESENDS_PATH + "/" + event.getPublicId())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildResendRequestBody("Attendee@Example.com")))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.message").value(RESEND_SUCCESS_MESSAGE));
+
+            verify(emailService).sendTicketEmail
+            (
+                eq("Attendee@Example.com"),
+                eq(ticket.getPublicToken()),
+                eq(event.getName()),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                isNull(),
+                anyString()
+            );
+        }
+
+        @Test
+        @DisplayName("Resend for an email with no registration returns 202 and does not send an email")
+        void resendForUnregisteredEmailReturns202AndDoesNotSendEmail() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PUBLIC, RegistrationStatus.OPEN, 100);
+
+            mockMvc.perform(post(RESENDS_PATH + "/" + event.getPublicId())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildResendRequestBody("unregistered@example.com")))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.message").value(RESEND_SUCCESS_MESSAGE));
+
+            verifyNoInteractions(emailService);
+        }
+
+        @Test
+        @DisplayName("Resend for an event the attendee did not register for returns 202 and does not send an email")
+        void resendForEmailRegisteredToDifferentEventReturns202AndDoesNotSendEmail() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event registeredEvent = createEvent(host, EventType.PUBLIC, RegistrationStatus.OPEN, 100);
+            Event otherEvent = createEvent(host, EventType.PUBLIC, RegistrationStatus.OPEN, 100);
+            createTicketForAttendee(registeredEvent, "attendee@example.com");
+
+            mockMvc.perform(post(RESENDS_PATH + "/" + otherEvent.getPublicId())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildResendRequestBody("attendee@example.com")))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.message").value(RESEND_SUCCESS_MESSAGE));
+
+            verifyNoInteractions(emailService);
+        }
+
+        @Test
+        @DisplayName("Resend for a soft-deleted ticket returns 202 and does not send an email")
+        void resendForDeletedTicketReturns202AndDoesNotSendEmail() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PUBLIC, RegistrationStatus.OPEN, 100);
+            Ticket ticket = createTicketForAttendee(event, "attendee@example.com");
+            ticket.setDeletedAt(LocalDateTime.now());
+            ticketRepository.save(ticket);
+
+            mockMvc.perform(post(RESENDS_PATH + "/" + event.getPublicId())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildResendRequestBody("attendee@example.com")))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.message").value(RESEND_SUCCESS_MESSAGE));
+
+            verifyNoInteractions(emailService);
+        }
+
+        @Test
+        @DisplayName("Resend for a canceled event returns 409")
+        void resendForCanceledEventReturns409() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent
+            (
+                host,
+                EventType.PUBLIC,
+                RegistrationStatus.OPEN,
+                100,
+                EventStatus.CANCELED,
+                LocalDateTime.now().plusDays(1),
+                LocalDateTime.now().plusDays(1).plusHours(2)
+            );
+            createTicketForAttendee(event, "attendee@example.com");
+
+            mockMvc.perform(post(RESENDS_PATH + "/" + event.getPublicId())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildResendRequestBody("attendee@example.com")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
+
+            verifyNoInteractions(emailService);
+        }
+
+        @Test
+        @DisplayName("Resend for a non-existent event returns 404")
+        void resendForNonExistentEventReturns404() throws Exception
+        {
+            createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+
+            mockMvc.perform(post(RESENDS_PATH + "/" + UUID.randomUUID().toString())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildResendRequestBody("attendee@example.com")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+
+            verifyNoInteractions(emailService);
+        }
+
+        @Test
+        @DisplayName("Resend with a blank email returns 400")
+        void resendWithBlankEmailReturns400() throws Exception
+        {
+            mockMvc.perform(post(RESENDS_PATH + "/" + UUID.randomUUID().toString())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildResendRequestBody("")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        }
+
+        @Test
+        @DisplayName("Resend with a missing email returns 400")
+        void resendWithMissingEmailReturns400() throws Exception
+        {
+            mockMvc.perform(post(RESENDS_PATH + "/" + UUID.randomUUID().toString())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        }
+
+        @Test
+        @DisplayName("Resend with an invalid email returns 400")
+        void resendWithInvalidEmailReturns400() throws Exception
+        {
+            mockMvc.perform(post(RESENDS_PATH + "/" + UUID.randomUUID().toString())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildResendRequestBody("not-an-email")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        }
+
+        @Test
+        @DisplayName("Resend with a too-long email returns 400")
+        void resendWithTooLongEmailReturns400() throws Exception
+        {
+            String tooLongEmail =
+                "a".repeat(AppConstants.Database.EventHosts.Sizes.MAX_EMAIL_LENGTH) + "@example.com";
+
+            mockMvc.perform(post(RESENDS_PATH + "/" + UUID.randomUUID().toString())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildResendRequestBody(tooLongEmail)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        }
+
+        @Test
+        @DisplayName("Resend with a too-long event public ID returns 400")
+        void resendWithTooLongPublicIdReturns400() throws Exception
+        {
+            String tooLongPublicId =
+                "a".repeat(AppConstants.Database.Events.Sizes.PUBLIC_ID_LENGTH + 1);
+
+            mockMvc.perform(post(RESENDS_PATH + "/" + tooLongPublicId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildResendRequestBody("attendee@example.com")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+
+            verifyNoInteractions(emailService);
         }
     }
 }
