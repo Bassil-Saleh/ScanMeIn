@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ticketproject.webapp.constants.AppConstants;
 import com.ticketproject.webapp.dtos.requests.CreatePrivateEventInvitationRequest;
 import com.ticketproject.webapp.dtos.requests.CreatePublicEventRegistrationRequest;
+import com.ticketproject.webapp.dtos.requests.ResendEventTicketEmailRequest;
 import com.ticketproject.webapp.dtos.responses.SingleMessageResponse;
 import com.ticketproject.webapp.exceptions.EmailAlreadyExistsException;
 import com.ticketproject.webapp.exceptions.EventAlreadyCanceledException;
@@ -307,5 +308,85 @@ public class AttendeeService
 
         return new SingleMessageResponse
         ("Invitation created. A ticket with a QR code has been sent to your recipient's email.");
+    }
+
+    /**
+     * Services a request to let an attendee have their ticket for
+     * a specific event resent to their email address (in case
+     * they lost the original email message containing their ticket).
+     * @param request the request body
+     * @param publicId the event's public ID
+     * @return a SingleMessageResponse on success
+     */
+    public SingleMessageResponse resendEventTicketEmail(ResendEventTicketEmailRequest request, String publicId)
+    {
+        // Enforce the email allowlist for the requesting attendee.
+        accessControlService.requireEmailAllowed(request.email());
+
+        if (publicId == null)
+        {
+            throw new InvalidRequestException("Event public id cannot be null.");
+        }
+
+        if (publicId.length() > AppConstants.Database.Events.Sizes.PUBLIC_ID_LENGTH)
+        {
+            throw new InvalidRequestException
+            (
+                "Event public id cannot be longer than " +
+                AppConstants.Database.Events.Sizes.PUBLIC_ID_LENGTH +
+                " characters."
+            );
+        }
+
+        Optional<Event> event = eventRepository.findByPublicId(publicId);
+        if (event.isEmpty())
+        {
+            throw new EntityNotFoundException("Could not find an event with the provided public id.");
+        }
+
+        String successMessage = "If a registration exists for that email address, then a ticket has been sent to it.";
+
+        Event foundEvent = event.get();
+
+        if (foundEvent.getEventStatus() == EventStatus.CANCELED)
+        {
+            return new SingleMessageResponse("The event has already been canceled.");
+        }
+
+        byte[] emailBlindIndex = blindIndexService.computeIndex(request.email());
+
+        if (ticketRepository.attendeeRegistrationExistsByEventId(emailBlindIndex, foundEvent.getId()))
+        {
+            Optional<Ticket> ticket = ticketRepository.findActiveTicketByEmailBlindIndexAndEventId(emailBlindIndex, foundEvent.getId());
+
+            if (ticket.isEmpty())
+            {
+                // The ticket is not active
+                return new SingleMessageResponse(successMessage);
+            }
+
+            Ticket foundTicket = ticket.get();
+            EventAddress eventAddress = foundEvent.getEventAddress();
+            EventHost eventHost = foundEvent.getEventHost();
+            String eventHostName = eventHost.getFirstName() + " " + eventHost.getLastName();
+
+            emailService.sendTicketEmail
+            (
+                request.email(),
+                foundTicket.getPublicToken(),
+                foundEvent.getName(),
+                foundEvent.getStartDateTime(),
+                foundEvent.getEndDateTime(),
+                eventHostName,
+                eventAddress.getCity(),
+                eventAddress.getState(),
+                eventAddress.getCountry(),
+                eventAddress.getAddressLine1(),
+                eventAddress.getAddressLine2(),
+                eventAddress.getPostalCode()
+            );
+        }
+
+        return new SingleMessageResponse(successMessage);
     }
 }

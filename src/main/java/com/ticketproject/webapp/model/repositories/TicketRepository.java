@@ -74,4 +74,21 @@ public interface TicketRepository extends JpaRepository<Ticket, Long>
         @Param("eventId")
         Long eventId
     );
+
+    /**
+     * Find and retrieve an active Ticket entity for a given Event
+     * using the event's ID and an email blind index.
+     * @param emailBlindIndex an email blind index
+     * @param eventId the ID of an event
+     * @return a Ticket entity
+     */
+    @Query("SELECT t FROM Ticket t WHERE t.event.id = :eventId AND t.deletedAt IS NULL AND t.attendee.emailBlindIndex = :emailBlindIndex")
+    Optional<Ticket> findActiveTicketByEmailBlindIndexAndEventId
+    (
+        @Param("emailBlindIndex")
+        byte[] emailBlindIndex,
+
+        @Param("eventId")
+        Long eventId
+    );
 }
