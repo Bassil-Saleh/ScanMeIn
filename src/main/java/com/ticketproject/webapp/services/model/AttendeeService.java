@@ -350,7 +350,7 @@ public class AttendeeService
 
         if (foundEvent.getEventStatus() == EventStatus.CANCELED)
         {
-            return new SingleMessageResponse("The event has already been canceled.");
+            throw new EventAlreadyCanceledException("The event has already been canceled.");
         }
 
         byte[] emailBlindIndex = blindIndexService.computeIndex(request.email());
