@@ -29,6 +29,24 @@ interface EventInfo {
  * @returns JSX for the site's view event page
  */
 export function ViewEventPage() {
+    // TODO: If the event is in the Published status, show a button
+    //       saying "Resend Ticket" under the event's information.
+
+    // TODO: Clicking "Resend Ticket" should show a form containing:
+    //       - A sentence telling them to enter their email address
+    //         so that their ticket can be resent to them.
+    //       - A text input field for the attendee to enter their email address.
+    //       - A "Submit" button to send a request to the API route
+    //         POST /api/v1/attendees/resends/{publicId}.
+    //         The "Submit" button should only work when the
+    //         text input field is non-empty and not blank.
+    //       - A "Cancel" button to close the form.
+
+
+    // TODO: After the user submits their email address through the
+    //       "Resend Ticket" form, show a message to the user
+    //       based on the request's response.
+
     const { publicId } = useParams<{ publicId: string }>();
     const { authFetch } = useAuth();
 
