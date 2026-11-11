@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type SubmitEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from './AuthContext.tsx';
 
@@ -29,30 +29,19 @@ interface EventInfo {
  * @returns JSX for the site's view event page
  */
 export function ViewEventPage() {
-    // TODO: If the event is in the Published status, show a button
-    //       saying "Resend Ticket" under the event's information.
-
-    // TODO: Clicking "Resend Ticket" should show a form containing:
-    //       - A sentence telling them to enter their email address
-    //         so that their ticket can be resent to them.
-    //       - A text input field for the attendee to enter their email address.
-    //       - A "Submit" button to send a request to the API route
-    //         POST /api/v1/attendees/resends/{publicId}.
-    //         The "Submit" button should only work when the
-    //         text input field is non-empty and not blank.
-    //       - A "Cancel" button to close the form.
-
-
-    // TODO: After the user submits their email address through the
-    //       "Resend Ticket" form, show a message to the user
-    //       based on the request's response.
-
     const { publicId } = useParams<{ publicId: string }>();
     const { authFetch } = useAuth();
 
     const [event, setEvent] = useState<EventInfo | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
+
+    // "Resend Ticket" form state
+    const [showResendForm, setShowResendForm] = useState(false);
+    const [resendEmail, setResendEmail] = useState('');
+    const [isResending, setIsResending] = useState(false);
+    const [resendSuccessMessage, setResendSuccessMessage] = useState('');
+    const [resendErrorMessage, setResendErrorMessage] = useState('');
 
     /**
      * Fetches the event's details using its public ID via
@@ -88,6 +77,86 @@ export function ViewEventPage() {
         fetchEvent();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [publicId, authFetch]);
+
+    // Close the "Resend Ticket" form and clear its state when the
+    // user navigates to a different event.
+    useEffect(() => {
+        setShowResendForm(false);
+        setResendEmail('');
+        setResendSuccessMessage('');
+        setResendErrorMessage('');
+    }, [publicId]);
+
+    /**
+     * Handles the "Resend Ticket" form submission. Calls
+     * POST /api/v1/attendees/resends/{publicId} with the attendee's
+     * email address so that their ticket for this event is resent
+     * to them. The API responds with the same generic message
+     * whether or not a registration exists for the email address,
+     * so this page never reveals whether someone is registered.
+     */
+    const handleResendSubmit = async (e: SubmitEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (!publicId) return;
+
+        const email = resendEmail.trim();
+        if (email === '') return;
+
+        setResendSuccessMessage('');
+        setResendErrorMessage('');
+        setIsResending(true);
+
+        try {
+            const response = await authFetch(
+                `/api/v1/attendees/resends/${encodeURIComponent(publicId)}`,
+                {
+                    method: 'POST',
+                    body: JSON.stringify({ email }),
+                }
+            );
+            // The response body may not be JSON (e.g. if the request is
+            // intercepted by a proxy), so fall back to an empty object.
+            const data = await response.json().catch(() => ({}));
+
+            if (response.ok) {
+                setResendSuccessMessage(
+                    data.message ||
+                    'If a registration exists for that email address, then a ticket has been sent to it.'
+                );
+                // Close the form and clear the input after a successful request.
+                setShowResendForm(false);
+                setResendEmail('');
+            } else {
+                setResendErrorMessage(
+                    data.message || 'Failed to resend the ticket. Please try again.'
+                );
+            }
+        } catch {
+            setResendErrorMessage('An unexpected error occurred. Please try again.');
+        } finally {
+            setIsResending(false);
+        }
+    };
+
+    /**
+     * Opens the "Resend Ticket" form and clears any message left
+     * over from a previous attempt.
+     */
+    const openResendForm = () => {
+        setResendSuccessMessage('');
+        setResendErrorMessage('');
+        setShowResendForm(true);
+    };
+
+    /**
+     * Closes the "Resend Ticket" form and discards anything the
+     * attendee typed into it.
+     */
+    const handleResendCancel = () => {
+        setShowResendForm(false);
+        setResendEmail('');
+        setResendErrorMessage('');
+    };
 
     /**
      * Formats an ISO date-time string into a human-readable format.
@@ -160,6 +229,7 @@ export function ViewEventPage() {
     const registrationClosed = isRegistrationClosed();
     const isDraft = event.eventStatus === 'DRAFT';
     const isCanceled = event.eventStatus === 'CANCELED';
+    const isPublished = event.eventStatus === 'PUBLISHED';
 
     return (
         <main className="page-container">
@@ -243,6 +313,82 @@ export function ViewEventPage() {
                         <h2 className="view-event__section-title">Capacity</h2>
                         <p>Current / maximum attendees: {event.numberOfRegisteredAttendees} / {event.maxAttendees}</p>
                     </section>
+
+                    {/* Only published events let attendees resend their ticket. */}
+                    {isPublished && (
+                        <section className="view-event__section">
+                            <h2 className="view-event__section-title">Lost Your Ticket?</h2>
+
+                            {resendSuccessMessage && (
+                                <div className="alert alert--success" role="alert">
+                                    {resendSuccessMessage}
+                                </div>
+                            )}
+
+                            {resendErrorMessage && (
+                                <div className="alert alert--error" role="alert">
+                                    {resendErrorMessage}
+                                </div>
+                            )}
+
+                            {!showResendForm ? (
+                                <button
+                                    type="button"
+                                    className="btn btn--outline"
+                                    onClick={openResendForm}
+                                    aria-expanded={false}
+                                    aria-controls="resend-ticket-form"
+                                >
+                                    Resend Ticket
+                                </button>
+                            ) : (
+                                <form id="resend-ticket-form" onSubmit={handleResendSubmit} noValidate>
+                                    <p>
+                                        Enter the email address you used to register for this
+                                        event, and we will resend your ticket to it.
+                                    </p>
+
+                                    <div className="form-group">
+                                        <label className="form-label" htmlFor="resend-ticket-email">
+                                            Email Address
+                                        </label>
+                                        <input
+                                            id="resend-ticket-email"
+                                            className="form-input"
+                                            type="email"
+                                            value={resendEmail}
+                                            onChange={(e) => setResendEmail(e.target.value)}
+                                            placeholder="jane.smith@example.com"
+                                            maxLength={254}
+                                            autoComplete="email"
+                                            required
+                                        />
+                                        <div className="form-hint">
+                                            Your ticket will be sent to this email address.
+                                        </div>
+                                    </div>
+
+                                    <div className="form-actions">
+                                        <button
+                                            type="submit"
+                                            className="btn btn--primary"
+                                            disabled={isResending || resendEmail.trim() === ''}
+                                        >
+                                            {isResending ? 'Sending...' : 'Submit'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn btn--ghost"
+                                            onClick={handleResendCancel}
+                                            disabled={isResending}
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+                        </section>
+                    )}
                 </div>
             </div>
         </main>
