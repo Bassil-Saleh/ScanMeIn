@@ -370,21 +370,42 @@ public class AttendeeService
             EventHost eventHost = foundEvent.getEventHost();
             String eventHostName = eventHost.getFirstName() + " " + eventHost.getLastName();
 
-            emailService.sendTicketEmail
-            (
-                request.email(),
-                foundTicket.getPublicToken(),
-                foundEvent.getName(),
-                foundEvent.getStartDateTime(),
-                foundEvent.getEndDateTime(),
-                eventHostName,
-                eventAddress.getCity(),
-                eventAddress.getState(),
-                eventAddress.getCountry(),
-                eventAddress.getAddressLine1(),
-                eventAddress.getAddressLine2(),
-                eventAddress.getPostalCode()
-            );
+            if (foundEvent.getEventType() == EventType.PUBLIC)
+            {
+                emailService.sendTicketEmail
+                (
+                    request.email(),
+                    foundTicket.getPublicToken(),
+                    foundEvent.getName(),
+                    foundEvent.getStartDateTime(),
+                    foundEvent.getEndDateTime(),
+                    eventHostName,
+                    eventAddress.getCity(),
+                    eventAddress.getState(),
+                    eventAddress.getCountry(),
+                    eventAddress.getAddressLine1(),
+                    eventAddress.getAddressLine2(),
+                    eventAddress.getPostalCode()
+                );
+            }
+            else
+            {
+                emailService.sendInvitationEmail
+                (
+                    request.email(),
+                    foundTicket.getPublicToken(),
+                    foundEvent.getName(),
+                    foundEvent.getStartDateTime(),
+                    foundEvent.getEndDateTime(),
+                    eventHostName,
+                    eventAddress.getCity(),
+                    eventAddress.getState(),
+                    eventAddress.getCountry(),
+                    eventAddress.getAddressLine1(),
+                    eventAddress.getAddressLine2(),
+                    eventAddress.getPostalCode()
+                );
+            }
         }
 
         return new SingleMessageResponse(successMessage);
