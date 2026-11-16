@@ -282,7 +282,7 @@ public class EmailService
                 AppConstants.Project.PROJECT_NAME
             );
             helper.setTo(toEmail);
-            helper.setSubject(AppConstants.Email.Subjects.TICKET_EMAIL);
+            helper.setSubject(AppConstants.Email.Subjects.TICKET_EMAIL.formatted(eventName));
             helper.setText(htmlContent, true);
             helper.addInline
             (
@@ -376,7 +376,7 @@ public class EmailService
                 AppConstants.Project.PROJECT_NAME
             );
             helper.setTo(toEmail);
-            helper.setSubject(AppConstants.Email.Subjects.INVITATION_EMAIL);
+            helper.setSubject(AppConstants.Email.Subjects.INVITATION_EMAIL.formatted(eventName));
             helper.setText(htmlContent, true);
             helper.addInline
             (
@@ -444,7 +444,7 @@ public class EmailService
                 AppConstants.Project.PROJECT_NAME
             );
             helper.setTo(toEmail);
-            helper.setSubject(AppConstants.Email.Subjects.INVITATION_RESPONSE_EMAIL);
+            helper.setSubject(AppConstants.Email.Subjects.INVITATION_RESPONSE_EMAIL.formatted(eventName));
             helper.setText(htmlContent, true);
 
             mailSender.send(message);
@@ -504,7 +504,7 @@ public class EmailService
             sendHtmlEmail
             (
                 attendeeEmails,
-                AppConstants.Email.Subjects.EVENT_ADDRESS_CHANGED_EMAIL,
+                AppConstants.Email.Subjects.EVENT_ADDRESS_CHANGED_EMAIL.formatted(eventName),
                 AppConstants.Email.Templates.EVENT_ADDRESS_CHANGED_EMAIL,
                 variables
             );
@@ -552,7 +552,7 @@ public class EmailService
             sendHtmlEmail
             (
                 attendeeEmails,
-                AppConstants.Email.Subjects.EVENT_DATES_CHANGED_EMAIL,
+                AppConstants.Email.Subjects.EVENT_DATES_CHANGED_EMAIL.formatted(eventName),
                 AppConstants.Email.Templates.EVENT_DATES_CHANGED_EMAIL,
                 variables
             );
@@ -597,7 +597,7 @@ public class EmailService
             sendHtmlEmail
             (
                 attendeeEmails,
-                AppConstants.Email.Subjects.EVENT_DESCRIPTION_CHANGED_EMAIL,
+                AppConstants.Email.Subjects.EVENT_DESCRIPTION_CHANGED_EMAIL.formatted(eventName),
                 AppConstants.Email.Templates.EVENT_DESCRIPTION_CHANGED_EMAIL,
                 variables
             );
@@ -642,7 +642,7 @@ public class EmailService
             sendHtmlEmail
             (
                 attendeeEmails,
-                AppConstants.Email.Subjects.EVENT_MAX_ATTENDEES_CHANGED_EMAIL,
+                AppConstants.Email.Subjects.EVENT_MAX_ATTENDEES_CHANGED_EMAIL.formatted(eventName),
                 AppConstants.Email.Templates.EVENT_MAX_ATTENDEES_CHANGED_EMAIL,
                 variables
             );
@@ -687,7 +687,7 @@ public class EmailService
             sendHtmlEmail
             (
                 attendeeEmails,
-                AppConstants.Email.Subjects.EVENT_NAME_CHANGED_EMAIL,
+                AppConstants.Email.Subjects.EVENT_NAME_CHANGED_EMAIL.formatted(oldEventName),
                 AppConstants.Email.Templates.EVENT_NAME_CHANGED_EMAIL,
                 variables
             );
@@ -736,7 +736,7 @@ public class EmailService
             sendHtmlEmail
             (
                 attendeeEmails,
-                AppConstants.Email.Subjects.EVENT_TYPE_CHANGED_EMAIL,
+                AppConstants.Email.Subjects.EVENT_TYPE_CHANGED_EMAIL.formatted(eventName),
                 AppConstants.Email.Templates.EVENT_TYPE_CHANGED_EMAIL,
                 variables
             );

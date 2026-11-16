@@ -1102,15 +1102,15 @@ public final class AppConstants
 
             public static final String PASSWORD_RESET_EMAIL = AppConstants.Project.PROJECT_NAME + " Account Password Reset Request";
             public static final String VERIFICATION_EMAIL = "Verify Your " + AppConstants.Project.PROJECT_NAME + " Account";
-            public static final String TICKET_EMAIL = "Your " + AppConstants.Project.PROJECT_NAME + " Event Ticket";
-            public static final String INVITATION_EMAIL = AppConstants.Project.PROJECT_NAME + " Event Invitation";
-            public static final String INVITATION_RESPONSE_EMAIL = "Invitation Response";
-            public static final String EVENT_ADDRESS_CHANGED_EMAIL = "Event Address Changed";
-            public static final String EVENT_DATES_CHANGED_EMAIL = "Event Dates Changed";
-            public static final String EVENT_DESCRIPTION_CHANGED_EMAIL = "Event Description Changed";
-            public static final String EVENT_MAX_ATTENDEES_CHANGED_EMAIL = "Event Attendance Cap Changed";
-            public static final String EVENT_NAME_CHANGED_EMAIL = "Event Name Changed";
-            public static final String EVENT_TYPE_CHANGED_EMAIL = "Event Type Changed";
+            public static final String TICKET_EMAIL = "Your Ticket for %s";
+            public static final String INVITATION_EMAIL = "Your Invitation to %s";
+            public static final String INVITATION_RESPONSE_EMAIL = "%s - Invitation Response";
+            public static final String EVENT_ADDRESS_CHANGED_EMAIL = "%s - Event Address Changed";
+            public static final String EVENT_DATES_CHANGED_EMAIL = "%s - Event Dates Changed";
+            public static final String EVENT_DESCRIPTION_CHANGED_EMAIL = "%s - Event Description Changed";
+            public static final String EVENT_MAX_ATTENDEES_CHANGED_EMAIL = "%s - Event Attendance Cap Changed";
+            public static final String EVENT_NAME_CHANGED_EMAIL = "%s - Event Name Changed";
+            public static final String EVENT_TYPE_CHANGED_EMAIL = "%s - Event Type Changed";
         }
 
         public static final class Templates
