@@ -14,7 +14,7 @@ import jakarta.validation.constraints.Size;
  * for an event should look like.
  * @param publicId the event's public ID
  * @param email the attendee's email address
- * @param message why the attendee's registration was blocked (optional)
+ * @param reason why the attendee's registration was blocked (optional)
  */
 @Schema(description = "Request body for blocking an attendee's registration to an event")
 public record CreateBlockedRegistrationRequest
@@ -74,7 +74,7 @@ public record CreateBlockedRegistrationRequest
             AppConstants.DTO.Tickets.Sizes.MAX_MESSAGE_LENGTH +
             " characters"
     )
-    String message
+    String reason
 )
 {
 }

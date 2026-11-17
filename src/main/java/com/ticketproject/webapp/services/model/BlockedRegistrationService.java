@@ -195,7 +195,7 @@ public class BlockedRegistrationService
             .attendee(foundAttendee)
             .event(foundEvent)
             .blockedBy(eventHost)
-            .reason(request.message())
+            .reason(request.reason())
             .build();
         
         newBlock = blockedRegistrationRepository.save(newBlock);
