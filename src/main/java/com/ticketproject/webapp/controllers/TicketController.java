@@ -85,7 +85,7 @@ public class TicketController
         summary = "Retrieve info on a list of tickets for a specific event",
         description =
             "Retrieves a list of records on tickets for a specific event. " +
-            "Only the event host who created the event should be allowed see those records. " +
+            "Only the event host who created the event should be allowed to see those records. " +
             "Requires authentication."
     )
     @GetMapping(ApiPaths.Tickets.BY_EVENT_PUBLIC_ID)

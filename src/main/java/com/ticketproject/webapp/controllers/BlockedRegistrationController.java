@@ -1,0 +1,55 @@
+package com.ticketproject.webapp.controllers;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
+import org.springframework.web.bind.annotation.RestController;
+
+import com.ticketproject.webapp.constants.ApiPaths;
+import com.ticketproject.webapp.constants.AppConstants;
+import com.ticketproject.webapp.dtos.responses.GetBlockedRegistrationsByEventPublicIdResponse;
+import com.ticketproject.webapp.exceptions.UnauthorizedException;
+import com.ticketproject.webapp.model.entities.EventHost;
+
+import jakarta.servlet.http.HttpServletRequest;
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.http.HttpStatus;
+
+/**
+ * BlockedRegistrationController is a REST controller that routes requests
+ * concerning BlockedRegistration entities to different API routes.
+ */
+@RestController
+@RequestMapping(ApiPaths.BASE + ApiPaths.BlockedRegistrations.ROOT)
+@Tag(name = "BlockedRegistrations", description = "Endpoints for blocked registration management")
+public class BlockedRegistrationController
+{
+    // TODO: write an API route to fetch blocked registrations by event public ID
+
+    @Operation
+    (
+        summary = "Retrieve info on a list of blocked registrations for a specific event",
+        description = 
+            "Retrieves a list of records on blocked registrations for a specific event. " +
+            "Only the event host who created the event should be allowed to see those records. " +
+            "Requires authentication."
+    )
+    @GetMapping(ApiPaths.BlockedRegistrations.BY_EVENT_PUBLIC_ID)
+    @ResponseStatus(HttpStatus.OK)
+    public GetBlockedRegistrationsByEventPublicIdResponse getBlockedRegistrationsByEventPublicId
+    (
+        @PathVariable String publicId,
+        HttpServletRequest servletRequest
+    )
+    {
+        EventHost eventHost = (EventHost) servletRequest.getAttribute(AppConstants.Jwt.Filter.AUTHENTICATED_EVENT_HOST_ATTRIBUTE);
+        if (eventHost == null)
+        {
+            throw new UnauthorizedException("Authentication required");
+        }
+    }
+}
