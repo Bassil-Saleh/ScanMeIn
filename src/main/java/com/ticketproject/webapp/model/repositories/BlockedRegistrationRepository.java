@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * BlockedRegistrationRepository is used to perform CRUD operations with BlockedRegistration entities.
@@ -30,4 +31,24 @@ public interface BlockedRegistrationRepository extends JpaRepository<BlockedRegi
         "WHERE b.event.id = :eventId"
     )
     List<BlockedRegistration> findAllByEventId(@Param("eventId") Long eventId);
+
+    /**
+     * Find and retrieve a blocked registration using an event's ID
+     * (not its public ID) and the blind index of an
+     * attendee's email address.
+     * @param eventId the event's ID (not its public ID)
+     * @param emailBlindIndex a blind index computed from the attendee's email address
+     * @return a BlockedRegistration entity
+     */
+    @Query
+    (
+        "SELECT b FROM BlockedRegistration b " +
+        "WHERE b.event.id = :eventId " +
+        "AND b.attendee.emailBlindIndex = :emailBlindIndex"
+    )
+    Optional<BlockedRegistration> findByEventIdAndEmailBlindIndex
+    (
+        @Param("eventId") Long eventId,
+        @Param("emailBlindIndex") byte[] emailBlindIndex
+    );
 }
