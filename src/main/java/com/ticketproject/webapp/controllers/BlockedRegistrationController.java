@@ -8,13 +8,18 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ticketproject.webapp.constants.ApiPaths;
 import com.ticketproject.webapp.constants.AppConstants;
+import com.ticketproject.webapp.dtos.requests.CreateBlockedRegistrationRequest;
 import com.ticketproject.webapp.dtos.responses.GetBlockedRegistrationsByEventPublicIdResponse;
+import com.ticketproject.webapp.dtos.responses.SingleMessageResponse;
 import com.ticketproject.webapp.exceptions.UnauthorizedException;
 import com.ticketproject.webapp.model.entities.EventHost;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.RequestBody;
 
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -30,6 +35,7 @@ import org.springframework.http.HttpStatus;
 public class BlockedRegistrationController
 {
     // TODO: write an API route to fetch blocked registrations by event public ID
+    // TODO: write an API route to create a blocked registration for a specific event
 
     private final BlockedRegistrationService blockedRegistrationService;
 
@@ -69,5 +75,38 @@ public class BlockedRegistrationController
             throw new UnauthorizedException("Authentication required");
         }
         return blockedRegistrationService.getBlockedRegistrationsByEventPublicId(eventHost, publicId);
+    }
+
+    /**
+     * Handles a request to let a logged in event host block an attendee's registration
+     * from a specific event identified by the event's public ID.
+     * Only the event host who created the event should be allowed to do this.
+     * @param request the request body
+     * @param servletRequest the HTTP Servlet request
+     * @return a SingleMessageResponse on success
+     */
+    @Operation
+    (
+        summary = "Block an attendee's registration from a specific event",
+        description =
+            "Block an attendee's registration from a specific event. " +
+            "Only the event host who created the event should be allowed to do this. " +
+            "Requires authentication."
+    )
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public SingleMessageResponse blockRegistration
+    (
+        @Valid
+        @RequestBody CreateBlockedRegistrationRequest request,
+        HttpServletRequest servletRequest
+    )
+    {
+        EventHost eventHost = (EventHost) servletRequest.getAttribute(AppConstants.Jwt.Filter.AUTHENTICATED_EVENT_HOST_ATTRIBUTE);
+        if (eventHost == null)
+        {
+            throw new UnauthorizedException("Authentication required");
+        }
+        return blockedRegistrationService.blockRegistration(eventHost, request);
     }
 }

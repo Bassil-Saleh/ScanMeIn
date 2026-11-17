@@ -32,6 +32,10 @@ public class BlockedRegistrationService
     // TODO: implement logic for a GET route to retrieve
     //       blocked registrations by event public ID.
 
+    // TODO: implement logic for a POST route to block
+    //       an attendee's registration to an event
+    //       identified by the event's public ID.
+
     private final BlockedRegistrationRepository blockedRegistrationRepository;
     private final EventRepository eventRepository;
 
