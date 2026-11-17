@@ -1,5 +1,6 @@
 package com.ticketproject.webapp.controllers;
 
+import com.ticketproject.webapp.services.model.BlockedRegistrationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
@@ -30,6 +31,22 @@ public class BlockedRegistrationController
 {
     // TODO: write an API route to fetch blocked registrations by event public ID
 
+    private final BlockedRegistrationService blockedRegistrationService;
+
+    BlockedRegistrationController(BlockedRegistrationService blockedRegistrationService)
+    {
+        this.blockedRegistrationService = blockedRegistrationService;
+    }
+
+    /**
+     * Handles a request to let a logged in event host retrieve a list of records
+     * on blocked registrations for an event identified by its public ID.
+     * Only the event host who created the event should be allowed
+     * to manage those records.
+     * @param publicId the event's public ID
+     * @param servletRequest the HTTP Servlet request
+     * @return a GetBlockedRegistrationsByEventPublicIdResponse on success
+     */
     @Operation
     (
         summary = "Retrieve info on a list of blocked registrations for a specific event",
@@ -51,5 +68,6 @@ public class BlockedRegistrationController
         {
             throw new UnauthorizedException("Authentication required");
         }
+        return blockedRegistrationService.getBlockedRegistrationsByEventPublicId(eventHost, publicId);
     }
 }

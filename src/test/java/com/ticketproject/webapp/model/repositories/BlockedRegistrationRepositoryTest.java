@@ -2,12 +2,14 @@ package com.ticketproject.webapp.model.repositories;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.Optional;
 import java.sql.SQLException;
 import java.sql.Connection;
 import javax.sql.DataSource;
 
+import org.hibernate.Hibernate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -474,6 +476,45 @@ class BlockedRegistrationRepositoryTest
             Optional<BlockedRegistration> loaded = blockedRegistrationRepository.findById(blockId);
             assertThat(loaded).isPresent();
             assertThat(loaded.get().getReason()).isEqualTo("Spam registration");
+        }
+    }
+
+    @Nested
+    @DisplayName("Query behavior")
+    class QueryBehavior
+    {
+        @Test
+        @DisplayName("findAllByEventId eagerly fetches attendee and blockedBy")
+        @Transactional(propagation = Propagation.NOT_SUPPORTED)
+        void findAllByEventIdFetchesAssociations()
+        {
+            txTemplate.execute(status ->
+            {
+                BlockedRegistration block = createBlock();
+                BlockedRegistration saved = blockedRegistrationRepository.saveAndFlush(block);
+                assertThat(saved).isNotNull();
+                assertThat(saved.getId()).isNotNull();
+                assertThat(blockedRegistrationRepository.findById(saved.getId())).isPresent();
+                return null;
+            });
+
+            List<BlockedRegistration> blocks = txTemplate.execute(status ->
+            {
+                List<BlockedRegistration> found =
+                    blockedRegistrationRepository.findAllByEventId(savedEvent.getId());
+                found.forEach(b ->
+                {
+                    assertThat(Hibernate.isInitialized(b.getAttendee())).isTrue();
+                    assertThat(Hibernate.isInitialized(b.getBlockedBy())).isTrue();
+                });
+                return found;
+            });
+
+            // Outside any transaction: these would throw LazyInitializationException
+            // if the JOIN FETCH is missing.
+            assertThat(blocks).hasSize(1);
+            assertThat(blocks.get(0).getAttendee().getEmail()).isEqualTo(savedAttendee.getEmail());
+            assertThat(blocks.get(0).getBlockedBy().getEmail()).isEqualTo(savedHost.getEmail());
         }
     }
 }
