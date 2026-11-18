@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -747,6 +748,49 @@ public class EmailService
             (
                 "Event type changed email could not be sent. Please try again later."
             );
+        }
+    }
+
+    /**
+     * Sends an email to an attendee notifying them that their registration
+     * to an event has been blocked.
+     * @param attendeeEmail the attendee's email address
+     * @param eventName the event name
+     * @param reason why the attendee was blocked (optional)
+     */
+    public void sendEventRegistrationBlockedEmail
+    (
+        String attendeeEmail,
+        String eventName,
+        String reason
+    )
+    {
+        requireAllowedRecipient(attendeeEmail);
+
+        try
+        {
+            // Prepare the Thymeleaf context with template variables.
+            Map<String, Object> variables = new HashMap<>();
+            variables.put("eventName", eventName);
+            if (reason != null && !reason.isBlank())
+            {
+                variables.put("reason", reason);
+            }
+
+            sendHtmlEmail
+            (
+                new ArrayList<>(List.of(attendeeEmail)),
+                AppConstants.Email.Subjects.EVENT_REGISTRATION_BLOCKED_EMAIL.formatted(eventName),
+                (reason != null && !reason.isBlank())
+                ? AppConstants.Email.Templates.EVENT_REGISTRATION_BLOCKED_WITH_REASON_EMAIL
+                : AppConstants.Email.Templates.EVENT_REGISTRATION_BLOCKED_NO_REASON_EMAIL,
+                variables
+            );
+        }
+        catch (MailException | MessagingException | IOException e)
+        {
+            throw new EmailSendFailedException
+            ("Registration block email could not be sent. Please try again later.");
         }
     }
 

@@ -16,6 +16,7 @@ import com.ticketproject.webapp.model.repositories.AttendeeRepository;
 import com.ticketproject.webapp.model.repositories.BlockedRegistrationRepository;
 import com.ticketproject.webapp.model.repositories.EventRepository;
 import com.ticketproject.webapp.services.database.BlindIndexService;
+import com.ticketproject.webapp.services.email.EmailService;
 import com.ticketproject.webapp.exceptions.UnauthorizedException;
 import com.ticketproject.webapp.exceptions.InvalidRequestException;
 import com.ticketproject.webapp.exceptions.InvalidCredentialsException;
@@ -45,19 +46,22 @@ public class BlockedRegistrationService
     private final EventRepository eventRepository;
     private final AttendeeRepository attendeeRepository;
     private final BlindIndexService blindIndexService;
+    private final EmailService emailService;
 
     public BlockedRegistrationService
     (
         BlockedRegistrationRepository blockedRegistrationRepository,
         EventRepository eventRepository,
         AttendeeRepository attendeeRepository,
-        BlindIndexService blindIndexService
+        BlindIndexService blindIndexService,
+        EmailService emailService
     )
     {
         this.blockedRegistrationRepository = blockedRegistrationRepository;
         this.eventRepository = eventRepository;
         this.attendeeRepository = attendeeRepository;
         this.blindIndexService = blindIndexService;
+        this.emailService = emailService;
     }
 
     /**
@@ -178,7 +182,7 @@ public class BlockedRegistrationService
 
         if (attendee.isEmpty())
         {
-            throw new EntityNotFoundException("No existing registration record exists for this attendee.");
+            throw new EntityNotFoundException("This attendee has not registered for any event so far.");
         }
 
         Attendee foundAttendee = attendee.get();
@@ -203,6 +207,7 @@ public class BlockedRegistrationService
         // TODO: send an email to the attendee that their registration
         //       was blocked, and include the message from the event host
         //       explaining why the attendee's registration was blocked.
+        emailService.sendEventRegistrationBlockedEmail(foundAttendee.getEmail(), foundEvent.getName(), request.reason());
 
         return new SingleMessageResponse("The attendee's registration has been blocked.");
     }

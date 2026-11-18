@@ -1111,6 +1111,7 @@ public final class AppConstants
             public static final String EVENT_MAX_ATTENDEES_CHANGED_EMAIL = "%s - Event Attendance Cap Changed";
             public static final String EVENT_NAME_CHANGED_EMAIL = "%s - Event Name Changed";
             public static final String EVENT_TYPE_CHANGED_EMAIL = "%s - Event Type Changed";
+            public static final String EVENT_REGISTRATION_BLOCKED_EMAIL = "%s - Registration Blocked";
         }
 
         public static final class Templates
@@ -1137,6 +1138,8 @@ public final class AppConstants
             public static final String EVENT_MAX_ATTENDEES_CHANGED_EMAIL = "email/event-max-attendees-changed-email";
             public static final String EVENT_NAME_CHANGED_EMAIL = "email/event-name-changed-email";
             public static final String EVENT_TYPE_CHANGED_EMAIL = "email/event-type-changed-email";
+            public static final String EVENT_REGISTRATION_BLOCKED_WITH_REASON_EMAIL = "email/event-registration-blocked-with-reason-email";
+            public static final String EVENT_REGISTRATION_BLOCKED_NO_REASON_EMAIL = "email/event-registration-blocked-no-reason-email";
         }
     }
 
