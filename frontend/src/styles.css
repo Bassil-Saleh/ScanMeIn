@@ -1470,6 +1470,17 @@ textarea.form-input {
     color: var(--color-text-secondary);
 }
 
+/* Spacing between the registrations table and the "Blocked Registrations"
+   section below it. */
+.manage-registrations__section {
+    margin-top: var(--space-2xl);
+}
+
+.manage-registrations__section-title {
+    font-size: var(--font-size-lg);
+    margin-bottom: var(--space-md);
+}
+
 /* Horizontally scrollable wrapper so the wide registrations table stays
    usable on small screens instead of overflowing the page. */
 .registrations-table__wrapper {
