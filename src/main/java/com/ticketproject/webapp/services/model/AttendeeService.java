@@ -8,6 +8,7 @@ import com.ticketproject.webapp.dtos.requests.CreatePrivateEventInvitationReques
 import com.ticketproject.webapp.dtos.requests.CreatePublicEventRegistrationRequest;
 import com.ticketproject.webapp.dtos.requests.ResendEventTicketEmailRequest;
 import com.ticketproject.webapp.dtos.responses.SingleMessageResponse;
+import com.ticketproject.webapp.exceptions.AttendeeBlockedException;
 import com.ticketproject.webapp.exceptions.EmailAlreadyExistsException;
 import com.ticketproject.webapp.exceptions.EventAlreadyCanceledException;
 import com.ticketproject.webapp.exceptions.EventRegistrationException;
@@ -15,6 +16,7 @@ import com.ticketproject.webapp.exceptions.UnauthorizedException;
 import com.ticketproject.webapp.exceptions.InvalidRequestException;
 import com.ticketproject.webapp.exceptions.InvalidCredentialsException;
 import com.ticketproject.webapp.model.entities.Attendee;
+import com.ticketproject.webapp.model.entities.BlockedRegistration;
 import com.ticketproject.webapp.model.entities.Event;
 import com.ticketproject.webapp.model.entities.EventAddress;
 import com.ticketproject.webapp.model.entities.EventHost;
@@ -23,6 +25,7 @@ import com.ticketproject.webapp.model.enums.EventType;
 import com.ticketproject.webapp.model.enums.EventStatus;
 import com.ticketproject.webapp.model.enums.RegistrationStatus;
 import com.ticketproject.webapp.model.repositories.AttendeeRepository;
+import com.ticketproject.webapp.model.repositories.BlockedRegistrationRepository;
 import com.ticketproject.webapp.model.repositories.EventRepository;
 import com.ticketproject.webapp.model.repositories.TicketRepository;
 import com.ticketproject.webapp.services.database.BlindIndexService;
@@ -46,6 +49,7 @@ public class AttendeeService
     private final AttendeeRepository attendeeRepository;
     private final EventRepository eventRepository;
     private final TicketRepository ticketRepository;
+    private final BlockedRegistrationRepository blockedRegistrationRepository;
     private final TicketService ticketService;
     private final BlindIndexService blindIndexService;
     private final EmailService emailService;
@@ -56,6 +60,7 @@ public class AttendeeService
         AttendeeRepository attendeeRepository,
         EventRepository eventRepository,
         TicketRepository ticketRepository,
+        BlockedRegistrationRepository blockedRegistrationRepository,
         TicketService ticketService,
         BlindIndexService blindIndexService,
         EmailService emailService,
@@ -65,6 +70,7 @@ public class AttendeeService
         this.attendeeRepository = attendeeRepository;
         this.eventRepository = eventRepository;
         this.ticketRepository = ticketRepository;
+        this.blockedRegistrationRepository = blockedRegistrationRepository;
         this.ticketService = ticketService;
         this.blindIndexService = blindIndexService;
         this.emailService = emailService;
@@ -123,6 +129,22 @@ public class AttendeeService
         if (foundEvent.getStartDateTime().isBefore(LocalDateTime.now()))
         {
             throw new EventRegistrationException("Cannot register after the event has already begun.");
+        }
+
+        // This chain of events is possible:
+        // - An attendee registers for an event.
+        // - The event host blocks the attendee and then
+        //   deletes the attendee's ticket from the system.
+        // - The attendee then attempts to register for
+        //   the same event again.
+        // In that case, it should not be possible for the blocked attendee
+        // to mint a new ticket for the event when they've already been blocked from it.
+        Optional<BlockedRegistration> existingBlock =
+            blockedRegistrationRepository.findByEventIdAndEmailBlindIndex(foundEvent.getId(), emailBlindIndex);
+        if (existingBlock.isPresent())
+        {
+            throw new AttendeeBlockedException
+            ("Cannot register because the attendee is already blocked from this event.");
         }
 
         Ticket signedTicket = ticketService.createSignedTicket(foundEvent);
@@ -252,6 +274,29 @@ public class AttendeeService
             throw new EventRegistrationException("Cannot create new invitations after the event has already begun.");
         }
 
+        // This chain of events is possible:
+        // - An attendee gets invited to an event.
+        // - The event host blocks the attendee and then
+        //   deletes the attendee's ticket from the system.
+        // - For whatever reason, the event host then attempts
+        //   to invite the same attendee to the event again
+        //   without unblocking said attendee first.
+        // In that case, it doesn't really make sense to mint a new ticket
+        // for the attendee, because the TicketScan service will reject
+        // the newly minted ticket due to the attendee still having
+        // a BlockedRegistration record for the event.
+        Optional<BlockedRegistration> existingBlock =
+            blockedRegistrationRepository.findByEventIdAndEmailBlindIndex(foundEvent.getId(), emailBlindIndex);
+
+        if (existingBlock.isPresent())
+        {
+            throw new AttendeeBlockedException
+            (
+                "Cannot create invitation because the attendee is already blocked from this event. " +
+                "Please unblock the attendee from this event first before trying to create a new invitation for them."
+            );
+        }
+
         Ticket signedTicket = ticketService.createSignedTicket(foundEvent);
 
         // If the attendee isn't already in the database,
@@ -354,6 +399,16 @@ public class AttendeeService
         }
 
         byte[] emailBlindIndex = blindIndexService.computeIndex(request.email());
+
+        // If the attendee is already blocked from the event, then
+        // it doesn't make sense to re-mail them their ticket
+        // because the TicketScanService will reject it anyway.
+        Optional<BlockedRegistration> existingBlock =
+            blockedRegistrationRepository.findByEventIdAndEmailBlindIndex(foundEvent.getId(), emailBlindIndex);
+        if (existingBlock.isPresent())
+        {
+            return new SingleMessageResponse(successMessage);
+        }
 
         if (ticketRepository.attendeeRegistrationExistsByEventId(emailBlindIndex, foundEvent.getId()))
         {
