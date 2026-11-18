@@ -51,6 +51,56 @@ interface EventTicketInfo {
  * @returns JSX for the site's manage event registrations page
  */
 export function ManageEventRegistrationsPage() {
+    // TODO: If there is at least one blocked registration, show a new table
+    //       called "Blocked Registrations" that lists blocked registrations
+    //       under the existing table of registrations.
+    //       - Each table row should show:
+    //         - First name
+    //         - Middle name
+    //         - Last name
+    //         - Email address
+    //         - Blocked (timestamp of when the
+    //           BlockedRegistration record was created)
+    //         - A checkbox to select the row.
+    //       - The table's header row should also include a checkbox
+    //         to select all rows at once.
+    //       - If there are no blocked registrations, then instead of
+    //         showing the table, show text saying no one
+    //         is currently blocked from the event.
+
+    // TODO: If the user is logged in, make a request to the API route
+    //       GET /api/v1/blocked-registrations/{publicId}
+    //       to fetch a list of registration blocks for the event.
+    //       - Populate the "Blocked Registrations" table with the response.
+
+    // TODO: Show a "Block" button next to the "Delete" button.
+    //       - The "Block" button should be disabled when no
+    //         registrations are selected (like the "Delete" button).
+    //       - Clicking the "Block" button should show a
+    //         confirmation dialog that has:
+    //         - A message asking the user if they want to proceed
+    //           with blocking the selected number of registrations.
+    //         - A "Cancel" button to exit out of the dialog.
+    //         - A "Block" button that sends a request to the API route
+    //           POST /api/v1/blocked-registrations to create
+    //           BlockedRegistration records for the selected attendees.
+
+    // TODO: After receiving a response from the API route
+    //       POST /api/v1/blocked-registrations, show a notification
+    //       based on the result.
+
+    // TODO: Show an "Unblock" button above the "Blocked Registrations" table.
+    //       - The "Unblock" button should be disabled when no
+    //         registration blocks are selected (like the "Delete" button).
+    //       - Clicking the "Unblock" button should show
+    //         a confirmation dialog that has:
+    //         - A message asking the user if they want to proceed with
+    //           unblocking the selected number of people from the event.
+    //         - A "Cancel" button to exit out of the dialog.
+    //         - A "Unblock" button that sends a request to the API route
+    //           DELETE /api/v1/blocked-registrations to delete
+    //           BlockedRegistration records for the selected attendees.
+
     const { isLoggedIn, authFetch } = useAuth();
     const navigate = useNavigate();
     const { publicId } = useParams<{ publicId: string }>();
