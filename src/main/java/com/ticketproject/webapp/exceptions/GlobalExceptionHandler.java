@@ -603,4 +603,31 @@ public class GlobalExceptionHandler
         );
         return new ResponseEntity<ErrorResponse>(errorResponse, HttpStatus.FORBIDDEN);
     }
+
+    /**
+     * Handles AttendeeBlockedException by returning a 403 Forbidden response.
+     * This is thrown when an operation is attempted with an attendee
+     * who has been blocked from an event (i.e. attempting to scan
+     * an attendee's ticket when they've been blocked from the event).
+     * @param ex      the exception that was thrown
+     * @param request the HTTP servlet request
+     * @return a ResponseEntity containing the error response and a 403 status
+     */
+    @ExceptionHandler(AttendeeBlockedException.class)
+    public ResponseEntity<ErrorResponse> handleAttendeeBlocked
+    (
+        AttendeeBlockedException ex,
+        HttpServletRequest request
+    )
+    {
+        ErrorResponse errorResponse = new ErrorResponse
+        (
+            Instant.now(),
+            HttpStatus.FORBIDDEN.value(),
+            HttpStatus.FORBIDDEN.getReasonPhrase(),
+            ex.getMessage(),
+            request.getRequestURI()
+        );
+        return new ResponseEntity<ErrorResponse>(errorResponse, HttpStatus.FORBIDDEN);
+    }
 }

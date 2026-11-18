@@ -38,7 +38,13 @@ public interface TicketRepository extends JpaRepository<Ticket, Long>
      * @param tokenIdentifier a token identifier
      * @return an Optional<Ticket>
      */
-    @Query("SELECT t FROM Ticket t JOIN FETCH t.event WHERE t.tokenIdentifier = :tokenIdentifier LIMIT 1")
+    @Query
+    (
+        "SELECT t FROM Ticket t " +
+        "JOIN FETCH t.event " +
+        "JOIN FETCH t.attendee " +
+        "WHERE t.tokenIdentifier = :tokenIdentifier LIMIT 1"
+    )
     Optional<Ticket> findByTokenIdentifier(@Param("tokenIdentifier") String tokenIdentifier);
 
     /**

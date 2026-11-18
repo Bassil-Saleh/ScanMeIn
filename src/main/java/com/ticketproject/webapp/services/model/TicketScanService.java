@@ -12,17 +12,22 @@ import com.ticketproject.webapp.dtos.requests.ScanTicketRequest;
 import com.ticketproject.webapp.dtos.responses.GetScannedTicketsByEventHostResponse;
 import com.ticketproject.webapp.dtos.responses.ScannedTicketInfo;
 import com.ticketproject.webapp.dtos.responses.SingleMessageResponse;
+import com.ticketproject.webapp.exceptions.AttendeeBlockedException;
 import com.ticketproject.webapp.exceptions.EventEndedException;
 import com.ticketproject.webapp.exceptions.InvalidRequestException;
 import com.ticketproject.webapp.exceptions.SigningKeyNotFoundException;
 import com.ticketproject.webapp.exceptions.TicketAlreadyScannedException;
 import com.ticketproject.webapp.exceptions.TicketScanFailedException;
 import com.ticketproject.webapp.exceptions.UnauthorizedException;
+import com.ticketproject.webapp.model.entities.Attendee;
+import com.ticketproject.webapp.model.entities.BlockedRegistration;
 import com.ticketproject.webapp.model.entities.Event;
 import com.ticketproject.webapp.model.entities.EventHost;
 import com.ticketproject.webapp.model.entities.Ticket;
 import com.ticketproject.webapp.model.entities.TicketScan;
 import com.ticketproject.webapp.model.repositories.TicketScanRepository;
+import com.ticketproject.webapp.services.database.BlindIndexService;
+import com.ticketproject.webapp.model.repositories.BlockedRegistrationRepository;
 import com.ticketproject.webapp.model.repositories.EventRepository;
 
 import jakarta.persistence.EntityNotFoundException;
@@ -33,18 +38,24 @@ public class TicketScanService
 {
     private final TicketScanRepository ticketScanRepository;
     private final EventRepository eventRepository;
+    private final BlockedRegistrationRepository blockedRegistrationRepository;
     private final TicketService ticketService;
+    private final BlindIndexService blindIndexService;
 
     public TicketScanService
     (
         TicketScanRepository ticketScanRepository,
         EventRepository eventRepository,
-        TicketService ticketService
+        BlockedRegistrationRepository blockedRegistrationRepository,
+        TicketService ticketService,
+        BlindIndexService blindIndexService
     )
     {
         this.ticketScanRepository = ticketScanRepository;
         this.eventRepository = eventRepository;
+        this.blockedRegistrationRepository = blockedRegistrationRepository;
         this.ticketService = ticketService;
+        this.blindIndexService = blindIndexService;
     }
 
     /**
@@ -76,6 +87,21 @@ public class TicketScanService
         )
         {
             throw e;
+        }
+
+        // TODO: if the ticket belongs to an attendee who has been blocked
+        //       from the event, then reject the ticket instead of
+        //       marking it as scanned.
+        Event foundEvent = foundTicket.getEvent();
+        Attendee foundAttendee = foundTicket.getAttendee();
+        byte[] emailBlindIndex = blindIndexService.computeIndex(foundAttendee.getEmail());
+        Optional<BlockedRegistration> existingBlock =
+            blockedRegistrationRepository.findByEventIdAndEmailBlindIndex(foundEvent.getId(), emailBlindIndex);
+
+        if (existingBlock.isPresent())
+        {
+            throw new AttendeeBlockedException
+            ("Cannot scan ticket because the attendee has been blocked from this event.");
         }
 
         LocalDateTime scannedAt = LocalDateTime.now();
