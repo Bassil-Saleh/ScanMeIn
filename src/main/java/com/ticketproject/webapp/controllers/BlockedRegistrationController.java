@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ticketproject.webapp.constants.ApiPaths;
 import com.ticketproject.webapp.constants.AppConstants;
-import com.ticketproject.webapp.dtos.requests.CreateBlockedRegistrationRequest;
+import com.ticketproject.webapp.dtos.requests.CreateBlockedRegistrationsRequest;
 import com.ticketproject.webapp.dtos.responses.GetBlockedRegistrationsByEventPublicIdResponse;
 import com.ticketproject.webapp.dtos.responses.SingleMessageResponse;
 import com.ticketproject.webapp.exceptions.UnauthorizedException;
@@ -78,7 +78,7 @@ public class BlockedRegistrationController
     }
 
     /**
-     * Handles a request to let a logged in event host block an attendee's registration
+     * Handles a request to let a logged in event host block multiple attendee registrations
      * from a specific event identified by the event's public ID.
      * Only the event host who created the event should be allowed to do this.
      * @param request the request body
@@ -87,18 +87,18 @@ public class BlockedRegistrationController
      */
     @Operation
     (
-        summary = "Block an attendee's registration from a specific event",
+        summary = "Block multiple attendee registrations from a specific event",
         description =
-            "Block an attendee's registration from a specific event. " +
+            "Block multiple attendee registrations from a specific event. " +
             "Only the event host who created the event should be allowed to do this. " +
             "Requires authentication."
     )
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public SingleMessageResponse blockRegistration
+    public SingleMessageResponse blockRegistrations
     (
         @Valid
-        @RequestBody CreateBlockedRegistrationRequest request,
+        @RequestBody CreateBlockedRegistrationsRequest request,
         HttpServletRequest servletRequest
     )
     {
@@ -107,6 +107,6 @@ public class BlockedRegistrationController
         {
             throw new UnauthorizedException("Authentication required");
         }
-        return blockedRegistrationService.blockRegistration(eventHost, request);
+        return blockedRegistrationService.blockRegistrations(eventHost, request);
     }
 }

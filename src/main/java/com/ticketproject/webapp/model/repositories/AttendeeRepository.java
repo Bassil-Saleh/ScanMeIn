@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
 
 /**
  * AttendeeRepository is used to perform CRUD operations with Attendee entities.
@@ -23,6 +24,19 @@ public interface AttendeeRepository extends JpaRepository<Attendee, Long>
      */
     @Query("SELECT a from Attendee a WHERE a.emailBlindIndex = :index")
     Optional<Attendee> findByEmailIndex(@Param("index") byte[] index);
+
+    /**
+     * Find and retrieve a list of Attendee entities using
+     * a list of email blind indexes.
+     * @param emailBlindIndexes a list of email blind indexes
+     * @return a list of Attendee entities
+     */
+    @Query("SELECT a FROM Attendee a WHERE a.emailBlindIndex IN :emailBlindIndexes")
+    List<Attendee> findAllByEmailIndexes
+    (
+        @Param("emailBlindIndexes")
+        List<byte[]> emailBlindIndexes
+    );
 
     /**
      * Check whether an Attendee entity with a specified email blind index exists.

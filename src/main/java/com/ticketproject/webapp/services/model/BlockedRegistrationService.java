@@ -4,7 +4,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketproject.webapp.constants.AppConstants;
-import com.ticketproject.webapp.dtos.requests.CreateBlockedRegistrationRequest;
+import com.ticketproject.webapp.dtos.requests.CreateBlockedRegistrationsRequest;
 import com.ticketproject.webapp.dtos.responses.BlockedRegistrationInfo;
 import com.ticketproject.webapp.dtos.responses.GetBlockedRegistrationsByEventPublicIdResponse;
 import com.ticketproject.webapp.dtos.responses.SingleMessageResponse;
@@ -134,14 +134,15 @@ public class BlockedRegistrationService
     }
 
     /**
-     * Handles a request to let a logged in event host block an attendee's registration
+     * Handles a request to let a logged in event host block multiple attendee registrations
      * from a specific event identified by the event's public ID.
      * Only the event host who created the event should be allowed to do this.
      * @param eventHost the logged in event host
      * @param request the request body
      * @return a SingleMessageResponse on success
      */
-    public SingleMessageResponse blockRegistration(EventHost eventHost, CreateBlockedRegistrationRequest request)
+    public SingleMessageResponse blockRegistrations
+    (EventHost eventHost, CreateBlockedRegistrationsRequest request)
     {
         if (eventHost == null)
         {
@@ -151,6 +152,16 @@ public class BlockedRegistrationService
         if (request.publicId() == null)
         {
             throw new InvalidRequestException("Event public id cannot be null.");
+        }
+
+        if (request.emails() == null)
+        {
+            throw new InvalidRequestException("List of emails cannot be null.");
+        }
+
+        if (request.emails().size() < 1)
+        {
+            throw new InvalidRequestException("List of emails cannot be empty.");
         }
 
         if (request.publicId().length() > AppConstants.Database.Events.Sizes.PUBLIC_ID_LENGTH)
@@ -176,39 +187,39 @@ public class BlockedRegistrationService
             throw new InvalidCredentialsException("Only the event host who created the event can manage its registrations.");
         }
 
-        byte[] emailBlindIndex = blindIndexService.computeIndex(request.email());
+        List<byte[]> emailBlindIndexes = request.emails()
+            .stream()
+            .map(email ->
+            {
+                byte[] emailBlindIndex = blindIndexService.computeIndex(email);
+                return emailBlindIndex;
+            })
+            .toList();
 
-        Optional<Attendee> attendee = attendeeRepository.findByEmailIndex(emailBlindIndex);
+        List<Attendee> attendees = attendeeRepository.findAllByEmailIndexes(emailBlindIndexes);
 
-        if (attendee.isEmpty())
+        int numOfBlockedRegistrations = 0;
+        for (Attendee anAttendee : attendees)
         {
-            throw new EntityNotFoundException("This attendee has not registered for any event so far.");
+            Optional<BlockedRegistration> existingBlock = blockedRegistrationRepository
+                .findByEventIdAndEmailBlindIndex(foundEvent.getId(), anAttendee.getEmailBlindIndex());
+
+            if (existingBlock.isPresent())
+                continue;
+
+            ++numOfBlockedRegistrations;
+
+            BlockedRegistration newBlock = new BlockedRegistration.Builder()
+                .attendee(anAttendee)
+                .event(foundEvent)
+                .blockedBy(eventHost)
+                .build();
+            newBlock = blockedRegistrationRepository.save(newBlock);
+
+            emailService.sendEventRegistrationBlockedEmail
+            (anAttendee.getEmail(), foundEvent.getName(), null);
         }
-
-        Attendee foundAttendee = attendee.get();
-
-        Optional<BlockedRegistration> existingBlock =
-            blockedRegistrationRepository.findByEventIdAndEmailBlindIndex(foundEvent.getId(), emailBlindIndex);
         
-        if (!existingBlock.isEmpty())
-        {
-            return new SingleMessageResponse("This attendee's registration is already blocked from the event.");
-        }
-
-        BlockedRegistration newBlock = new BlockedRegistration.Builder()
-            .attendee(foundAttendee)
-            .event(foundEvent)
-            .blockedBy(eventHost)
-            .reason(request.reason())
-            .build();
-        
-        newBlock = blockedRegistrationRepository.save(newBlock);
-
-        // TODO: send an email to the attendee that their registration
-        //       was blocked, and include the message from the event host
-        //       explaining why the attendee's registration was blocked.
-        emailService.sendEventRegistrationBlockedEmail(foundAttendee.getEmail(), foundEvent.getName(), request.reason());
-
-        return new SingleMessageResponse("The attendee's registration has been blocked.");
+        return new SingleMessageResponse("Blocked " + numOfBlockedRegistrations + " registrations.");
     }
 }
