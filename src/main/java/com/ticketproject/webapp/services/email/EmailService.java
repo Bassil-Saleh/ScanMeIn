@@ -795,6 +795,41 @@ public class EmailService
     }
 
     /**
+     * Sends an email to an attendee notifying them that their registration
+     * to an event has been unblocked.
+     * @param attendeeEmail the attendee's email address
+     * @param eventName the event name
+     */
+    public void sendEventRegistrationUnblockedEmail
+    (
+        String attendeeEmail,
+        String eventName
+    )
+    {
+        requireAllowedRecipient(attendeeEmail);
+
+        try
+        {
+            // Prepare the Thymeleaf context with template variables.
+            Map<String, Object> variables = new HashMap<>();
+            variables.put("eventName", eventName);
+
+            sendHtmlEmail
+            (
+                new ArrayList<>(List.of(attendeeEmail)),
+                AppConstants.Email.Subjects.EVENT_REGISTRATION_UNBLOCKED_EMAIL.formatted(eventName),
+                AppConstants.Email.Templates.EVENT_REGISTRATION_UNBLOCKED_EMAIL,
+                variables
+            );
+        }
+        catch (MailException | MessagingException | IOException e)
+        {
+            throw new EmailSendFailedException
+            ("Registration unblock email could not be sent. Please try again later.");
+        }
+    }
+
+    /**
      * Renders a Thymeleaf email template and sends the rendered
      * HTML email to every recipient in the given list.
      *

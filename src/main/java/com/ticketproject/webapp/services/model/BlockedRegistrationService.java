@@ -302,6 +302,7 @@ public class BlockedRegistrationService
 
             // TODO: send an email to the attendee notifying them that their
             //       registration to the event has been unblocked.
+            emailService.sendEventRegistrationUnblockedEmail(anAttendee.getEmail(), foundEvent.getName());
         }
         
         return new SingleMessageResponse("Unblocked " + numOfUnblockedRegistrations + " registrations.");
