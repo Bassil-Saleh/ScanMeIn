@@ -36,13 +36,6 @@ import java.util.List;
 @Transactional
 public class BlockedRegistrationService
 {
-    // TODO: implement logic for a GET route to retrieve
-    //       blocked registrations by event public ID.
-
-    // TODO: implement logic for a POST route to block
-    //       an attendee's registration to an event
-    //       identified by the event's public ID.
-
     private final BlockedRegistrationRepository blockedRegistrationRepository;
     private final EventRepository eventRepository;
     private final AttendeeRepository attendeeRepository;
@@ -300,8 +293,6 @@ public class BlockedRegistrationService
             blockedRegistrationRepository.delete(existingBlock.get());
             ++numOfUnblockedRegistrations;
 
-            // TODO: send an email to the attendee notifying them that their
-            //       registration to the event has been unblocked.
             emailService.sendEventRegistrationUnblockedEmail(anAttendee.getEmail(), foundEvent.getName());
         }
         

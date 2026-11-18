@@ -36,9 +36,6 @@ import org.springframework.http.HttpStatus;
 @Tag(name = "BlockedRegistrations", description = "Endpoints for blocked registration management")
 public class BlockedRegistrationController
 {
-    // TODO: write an API route to fetch blocked registrations by event public ID
-    // TODO: write an API route to create a blocked registration for a specific event
-
     private final BlockedRegistrationService blockedRegistrationService;
 
     BlockedRegistrationController(BlockedRegistrationService blockedRegistrationService)

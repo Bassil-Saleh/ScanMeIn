@@ -89,9 +89,6 @@ public class TicketScanService
             throw e;
         }
 
-        // TODO: if the ticket belongs to an attendee who has been blocked
-        //       from the event, then reject the ticket instead of
-        //       marking it as scanned.
         Event foundEvent = foundTicket.getEvent();
         Attendee foundAttendee = foundTicket.getAttendee();
         byte[] emailBlindIndex = blindIndexService.computeIndex(foundAttendee.getEmail());
