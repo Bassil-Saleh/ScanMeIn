@@ -5,6 +5,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketproject.webapp.constants.AppConstants;
 import com.ticketproject.webapp.dtos.requests.CreateBlockedRegistrationsRequest;
+import com.ticketproject.webapp.dtos.requests.DeleteBlockedRegistrationsRequest;
 import com.ticketproject.webapp.dtos.responses.BlockedRegistrationInfo;
 import com.ticketproject.webapp.dtos.responses.GetBlockedRegistrationsByEventPublicIdResponse;
 import com.ticketproject.webapp.dtos.responses.SingleMessageResponse;
@@ -134,7 +135,7 @@ public class BlockedRegistrationService
     }
 
     /**
-     * Handles a request to let a logged in event host block multiple attendee registrations
+     * Services a request to let a logged in event host block multiple attendee registrations
      * from a specific event identified by the event's public ID.
      * Only the event host who created the event should be allowed to do this.
      * @param eventHost the logged in event host
@@ -207,19 +208,102 @@ public class BlockedRegistrationService
             if (existingBlock.isPresent())
                 continue;
 
-            ++numOfBlockedRegistrations;
-
             BlockedRegistration newBlock = new BlockedRegistration.Builder()
                 .attendee(anAttendee)
                 .event(foundEvent)
                 .blockedBy(eventHost)
                 .build();
             newBlock = blockedRegistrationRepository.save(newBlock);
+            ++numOfBlockedRegistrations;
 
             emailService.sendEventRegistrationBlockedEmail
             (anAttendee.getEmail(), foundEvent.getName(), null);
         }
         
         return new SingleMessageResponse("Blocked " + numOfBlockedRegistrations + " registrations.");
+    }
+
+    /**
+     * Services a request to let a logged in event host unblock multiple attendee registrations
+     * from a specific event identified by the event's public ID.
+     * Only the event host who created the event should be allowed to do this.
+     * @param eventHost the logged in event host
+     * @param request the request body
+     * @return a SingleMessageResponse on success
+     */
+    public SingleMessageResponse unblockRegistrations
+    (EventHost eventHost, DeleteBlockedRegistrationsRequest request)
+    {
+        if (eventHost == null)
+        {
+            throw new UnauthorizedException("Authentication required");
+        }
+
+        if (request.publicId() == null)
+        {
+            throw new InvalidRequestException("Event public id cannot be null.");
+        }
+
+        if (request.emails() == null)
+        {
+            throw new InvalidRequestException("List of emails cannot be null.");
+        }
+
+        if (request.emails().size() < 1)
+        {
+            throw new InvalidRequestException("List of emails cannot be empty.");
+        }
+
+        if (request.publicId().length() > AppConstants.Database.Events.Sizes.PUBLIC_ID_LENGTH)
+        {
+            throw new InvalidRequestException
+            (
+                "Event public id cannot be longer than " +
+                AppConstants.Database.Events.Sizes.PUBLIC_ID_LENGTH +
+                " characters."
+            );
+        }
+
+        Optional<Event> event = eventRepository.findByPublicId(request.publicId());
+        if (event.isEmpty())
+        {
+            throw new EntityNotFoundException("Could not find an event with the provided public id.");
+        }
+
+        Event foundEvent = event.get();
+
+        if (Long.compare(foundEvent.getEventHost().getId(), eventHost.getId()) != 0)
+        {
+            throw new InvalidCredentialsException("Only the event host who created the event can manage its registrations.");
+        }
+
+        List<byte[]> emailBlindIndexes = request.emails()
+            .stream()
+            .map(email ->
+            {
+                byte[] emailBlindIndex = blindIndexService.computeIndex(email);
+                return emailBlindIndex;
+            })
+            .toList();
+
+        List<Attendee> attendees = attendeeRepository.findAllByEmailIndexes(emailBlindIndexes);
+
+        int numOfUnblockedRegistrations = 0;
+        for (Attendee anAttendee : attendees)
+        {
+            Optional<BlockedRegistration> existingBlock = blockedRegistrationRepository
+                .findByEventIdAndEmailBlindIndex(foundEvent.getId(), anAttendee.getEmailBlindIndex());
+
+            if (existingBlock.isEmpty())
+                continue;
+
+            blockedRegistrationRepository.delete(existingBlock.get());
+            ++numOfUnblockedRegistrations;
+
+            // TODO: send an email to the attendee notifying them that their
+            //       registration to the event has been unblocked.
+        }
+        
+        return new SingleMessageResponse("Unblocked " + numOfUnblockedRegistrations + " registrations.");
     }
 }
