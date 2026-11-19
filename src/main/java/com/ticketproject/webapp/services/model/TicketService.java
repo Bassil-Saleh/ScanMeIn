@@ -10,11 +10,13 @@ import com.ticketproject.webapp.exceptions.TicketGenerationException;
 import com.ticketproject.webapp.exceptions.InvalidRequestException;
 import com.ticketproject.webapp.exceptions.TicketAlreadyScannedException;
 import com.ticketproject.webapp.exceptions.TicketScanFailedException;
+import com.ticketproject.webapp.exceptions.AttendeeBlockedException;
 import com.ticketproject.webapp.exceptions.EventEndedException;
 import com.ticketproject.webapp.exceptions.SigningKeyNotFoundException;
 import com.ticketproject.webapp.exceptions.InvalidSignatureException;
 import com.ticketproject.webapp.exceptions.UnauthorizedException;
 import com.ticketproject.webapp.exceptions.InvalidCredentialsException;
+import com.ticketproject.webapp.model.entities.BlockedRegistration;
 import com.ticketproject.webapp.model.entities.Event;
 import com.ticketproject.webapp.model.entities.EventHost;
 import com.ticketproject.webapp.model.entities.EventSigningKey;
@@ -38,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ticketproject.webapp.model.enums.EventType;
 import com.ticketproject.webapp.model.enums.InvitationStatus;
+import com.ticketproject.webapp.model.repositories.BlockedRegistrationRepository;
 import com.ticketproject.webapp.model.repositories.EventRepository;
 import com.ticketproject.webapp.model.repositories.EventSigningKeyRepository;
 import com.ticketproject.webapp.model.repositories.TicketRepository;
@@ -54,6 +57,7 @@ public class TicketService
     private final TicketRepository ticketRepository;
     private final EventRepository eventRepository;
     private final EventSigningKeyRepository eventSigningKeyRepository;
+    private final BlockedRegistrationRepository blockedRegistrationRepository;
     private final EmailService emailService;
     private final BlindIndexService blindIndexService;
 
@@ -62,6 +66,7 @@ public class TicketService
         TicketRepository ticketRepository,
         EventRepository eventRepository,
         EventSigningKeyRepository eventSigningKeyRepository,
+        BlockedRegistrationRepository blockedRegistrationRepository,
         EmailService emailService,
         BlindIndexService blindIndexService
     )
@@ -69,6 +74,7 @@ public class TicketService
         this.ticketRepository = ticketRepository;
         this.eventRepository = eventRepository;
         this.eventSigningKeyRepository = eventSigningKeyRepository;
+        this.blockedRegistrationRepository = blockedRegistrationRepository;
         this.emailService = emailService;
         this.blindIndexService = blindIndexService;
     }
@@ -235,6 +241,19 @@ public class TicketService
         )
         {
             throw e;
+        }
+
+        // If the attendee is already blocked from the private event,
+        // then it doesn't make sense to let them respond to the invitation
+        // because the TicketScanService won't accept their ticket anyway.
+        Optional<BlockedRegistration> existingBlock =
+            blockedRegistrationRepository.findByEventIdAndEmailBlindIndex
+            (foundTicket.getEvent().getId(), foundTicket.getAttendee().getEmailBlindIndex());
+
+        if (existingBlock.isPresent())
+        {
+            throw new AttendeeBlockedException
+            ("Cannot respond to an invitation when you are already blocked from the event.");
         }
 
         InvitationStatus previousInvitationStatus = foundTicket.getInvitationStatus();
