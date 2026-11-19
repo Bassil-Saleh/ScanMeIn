@@ -3,6 +3,7 @@ package com.ticketproject.webapp.controllers;
 import com.ticketproject.webapp.constants.ApiPaths;
 import com.ticketproject.webapp.constants.AppConstants;
 import com.ticketproject.webapp.model.entities.Attendee;
+import com.ticketproject.webapp.model.entities.BlockedRegistration;
 import com.ticketproject.webapp.model.entities.Event;
 import com.ticketproject.webapp.model.entities.EventAddress;
 import com.ticketproject.webapp.model.entities.EventHost;
@@ -12,6 +13,7 @@ import com.ticketproject.webapp.model.enums.EventStatus;
 import com.ticketproject.webapp.model.enums.EventType;
 import com.ticketproject.webapp.model.enums.RegistrationStatus;
 import com.ticketproject.webapp.model.repositories.AttendeeRepository;
+import com.ticketproject.webapp.model.repositories.BlockedRegistrationRepository;
 import com.ticketproject.webapp.model.repositories.EventHostRepository;
 import com.ticketproject.webapp.model.repositories.EventRepository;
 import com.ticketproject.webapp.model.repositories.TicketRepository;
@@ -76,6 +78,9 @@ class AttendeeControllerTest
     private AttendeeRepository attendeeRepository;
 
     @Autowired
+    private BlockedRegistrationRepository blockedRegistrationRepository;
+
+    @Autowired
     private TicketService ticketService;
 
     @MockitoBean
@@ -98,6 +103,9 @@ class AttendeeControllerTest
     @BeforeEach
     void setUp()
     {
+        // Blocked registrations reference attendees, events, and event hosts,
+        // so they must be removed before those referenced entities.
+        blockedRegistrationRepository.deleteAll();
         ticketRepository.deleteAll();
         eventRepository.deleteAll();
         eventHostRepository.deleteAll();
@@ -312,6 +320,39 @@ class AttendeeControllerTest
     }
 
     /**
+     * Creates and persists an active Ticket for the given event and attendee.
+     *
+     * @param event the event the ticket belongs to
+     * @param attendee the attendee the ticket belongs to
+     * @return the persisted Ticket entity
+     */
+    private Ticket createTicketForAttendee(Event event, Attendee attendee)
+    {
+        Ticket ticket = ticketService.createSignedTicket(event);
+        ticket.setAttendee(attendee);
+        return ticketRepository.save(ticket);
+    }
+
+    /**
+     * Creates and persists a BlockedRegistration record.
+     *
+     * @param event the event the attendee is blocked from
+     * @param attendee the blocked attendee
+     * @param blockedBy the event host who authored the block
+     * @return the persisted BlockedRegistration entity
+     */
+    private BlockedRegistration createBlockedRegistration(Event event, Attendee attendee, EventHost blockedBy)
+    {
+        BlockedRegistration block = new BlockedRegistration.Builder()
+            .attendee(attendee)
+            .event(event)
+            .blockedBy(blockedBy)
+            .build();
+
+        return blockedRegistrationRepository.save(block);
+    }
+
+    /**
      * Builds a JSON request body for resending a ticket email.
      *
      * @param email the attendee's email address
@@ -396,6 +437,65 @@ class AttendeeControllerTest
 
             assertThat(emailCaptor.getValue()).isEqualTo("attendee@example.com");
             assertThat(tokenCaptor.getValue()).isNotBlank();
+        }
+
+        @Test
+        @DisplayName("Registration by an attendee blocked from the event returns 403 and does not send an email")
+        void blockedAttendeeRegistrationReturns403() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PUBLIC, RegistrationStatus.OPEN, 100);
+            Attendee attendee = createAttendee("blocked@example.com");
+            createBlockedRegistration(event, attendee, host);
+
+            mockMvc.perform(post(BASE_PATH)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildRegistrationRequestBody(
+                        event.getPublicId(), "John", "Doe", "blocked@example.com")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.message").value(
+                    "Cannot register because the attendee is already blocked from this event."));
+
+            verifyNoInteractions(emailService);
+            assertThat(ticketRepository.getRegistrationCountByEventId(event.getId())).isZero();
+        }
+
+        @Test
+        @DisplayName("Registration succeeds when the attendee is only blocked from a different event")
+        void registrationWhenBlockedFromDifferentEventReturns201() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event blockedEvent = createEvent(host, EventType.PUBLIC, RegistrationStatus.OPEN, 100);
+            Event event = createEvent(host, EventType.PUBLIC, RegistrationStatus.OPEN, 100);
+            Attendee attendee = createAttendee("attendee@example.com");
+
+            // The attendee is blocked from a different event, not the one being registered for.
+            createBlockedRegistration(blockedEvent, attendee, host);
+
+            mockMvc.perform(post(BASE_PATH)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildRegistrationRequestBody(
+                        event.getPublicId(), "John", "Doe", "attendee@example.com")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.message").value(
+                    "Registration completed. A ticket with a QR code has been sent to your email."));
+
+            verify(emailService).sendTicketEmail
+            (
+                eq("attendee@example.com"),
+                anyString(),
+                anyString(),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                isNull(),
+                anyString()
+            );
         }
 
         @Test
@@ -554,6 +654,70 @@ class AttendeeControllerTest
 
             assertThat(emailCaptor.getValue()).isEqualTo("invitee@example.com");
             assertThat(tokenCaptor.getValue()).isNotBlank();
+        }
+
+        @Test
+        @DisplayName("Invitation creation for an attendee blocked from the event returns 403 and does not send an email")
+        void invitationForBlockedAttendeeReturns403() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PRIVATE, RegistrationStatus.OPEN, 100);
+            Attendee attendee = createAttendee("invitee@example.com");
+            createBlockedRegistration(event, attendee, host);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            mockMvc.perform(post(INVITATION_PATH)
+                    .header("Authorization", "Bearer " + jwt)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildInvitationRequestBody(
+                        event.getPublicId(), "Jane", "Smith", "invitee@example.com")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.message").value(
+                    "Cannot create invitation because the attendee is already blocked from this event. " +
+                    "Please unblock the attendee from this event first before trying to create a new invitation for them."));
+
+            verifyNoInteractions(emailService);
+            assertThat(ticketRepository.getRegistrationCountByEventId(event.getId())).isZero();
+        }
+
+        @Test
+        @DisplayName("Invitation creation succeeds when the attendee is only blocked from a different event")
+        void invitationWhenAttendeeBlockedFromDifferentEventReturns201() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event blockedEvent = createEvent(host, EventType.PRIVATE, RegistrationStatus.OPEN, 100);
+            Event event = createEvent(host, EventType.PRIVATE, RegistrationStatus.OPEN, 100);
+            Attendee attendee = createAttendee("invitee@example.com");
+
+            // The attendee is blocked from a different event, not the one being invited to.
+            createBlockedRegistration(blockedEvent, attendee, host);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            mockMvc.perform(post(INVITATION_PATH)
+                    .header("Authorization", "Bearer " + jwt)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildInvitationRequestBody(
+                        event.getPublicId(), "Jane", "Smith", "invitee@example.com")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.message").value(
+                    "Invitation created. A ticket with a QR code has been sent to your recipient's email."));
+
+            verify(emailService).sendInvitationEmail
+            (
+                eq("invitee@example.com"),
+                anyString(),
+                anyString(),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                isNull(),
+                anyString()
+            );
         }
 
         @Test
@@ -807,6 +971,64 @@ class AttendeeControllerTest
 
             // Resending a ticket email must not create a second ticket.
             assertThat(ticketRepository.getRegistrationCountByEventId(event.getId())).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("Resend for an attendee blocked from the event returns 202 with the standard message but does not send an email")
+        void resendForBlockedAttendeeReturns202AndDoesNotSendEmail() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PUBLIC, RegistrationStatus.OPEN, 100);
+            Attendee attendee = createAttendee("attendee@example.com");
+            createTicketForAttendee(event, attendee);
+            createBlockedRegistration(event, attendee, host);
+
+            mockMvc.perform(post(RESENDS_PATH + "/" + event.getPublicId())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildResendRequestBody("attendee@example.com")))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.message").value(RESEND_SUCCESS_MESSAGE));
+
+            // The response must look identical to a successful resend,
+            // but the blocked attendee must not actually receive the email.
+            verifyNoInteractions(emailService);
+            assertThat(ticketRepository.getRegistrationCountByEventId(event.getId())).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("Resend still sends the ticket email when the attendee is only blocked from a different event")
+        void resendWhenAttendeeBlockedFromDifferentEventSendsEmail() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event blockedEvent = createEvent(host, EventType.PUBLIC, RegistrationStatus.OPEN, 100);
+            Event event = createEvent(host, EventType.PUBLIC, RegistrationStatus.OPEN, 100);
+            Attendee attendee = createAttendee("attendee@example.com");
+            Ticket ticket = createTicketForAttendee(event, attendee);
+
+            // The attendee is blocked from a different event, not the one being resent.
+            createBlockedRegistration(blockedEvent, attendee, host);
+
+            mockMvc.perform(post(RESENDS_PATH + "/" + event.getPublicId())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(buildResendRequestBody("attendee@example.com")))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.message").value(RESEND_SUCCESS_MESSAGE));
+
+            verify(emailService).sendTicketEmail
+            (
+                eq("attendee@example.com"),
+                eq(ticket.getPublicToken()),
+                eq(event.getName()),
+                any(LocalDateTime.class),
+                any(LocalDateTime.class),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                isNull(),
+                anyString()
+            );
         }
 
         @Test

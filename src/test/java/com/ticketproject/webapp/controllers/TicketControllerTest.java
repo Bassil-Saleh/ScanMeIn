@@ -2,6 +2,7 @@ package com.ticketproject.webapp.controllers;
 
 import com.ticketproject.webapp.constants.ApiPaths;
 import com.ticketproject.webapp.model.entities.Attendee;
+import com.ticketproject.webapp.model.entities.BlockedRegistration;
 import com.ticketproject.webapp.model.entities.Event;
 import com.ticketproject.webapp.model.entities.EventAddress;
 import com.ticketproject.webapp.model.entities.EventHost;
@@ -9,8 +10,10 @@ import com.ticketproject.webapp.model.entities.EventSigningKey;
 import com.ticketproject.webapp.model.entities.Ticket;
 import com.ticketproject.webapp.model.enums.EventStatus;
 import com.ticketproject.webapp.model.enums.EventType;
+import com.ticketproject.webapp.model.enums.InvitationStatus;
 import com.ticketproject.webapp.model.enums.RegistrationStatus;
 import com.ticketproject.webapp.model.repositories.AttendeeRepository;
+import com.ticketproject.webapp.model.repositories.BlockedRegistrationRepository;
 import com.ticketproject.webapp.model.repositories.EventHostRepository;
 import com.ticketproject.webapp.model.repositories.EventRepository;
 import com.ticketproject.webapp.model.repositories.TicketRepository;
@@ -40,7 +43,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -74,6 +79,9 @@ class TicketControllerTest
     private AttendeeRepository attendeeRepository;
 
     @Autowired
+    private BlockedRegistrationRepository blockedRegistrationRepository;
+
+    @Autowired
     private TicketService ticketService;
 
     @MockitoBean
@@ -94,6 +102,9 @@ class TicketControllerTest
     @BeforeEach
     void setUp()
     {
+        // Blocked registrations reference attendees, events, and event hosts,
+        // so they must be removed before those referenced entities.
+        blockedRegistrationRepository.deleteAll();
         ticketRepository.deleteAll();
         eventRepository.deleteAll();
         eventHostRepository.deleteAll();
@@ -198,6 +209,25 @@ class TicketControllerTest
         Ticket ticket = ticketService.createSignedTicket(event);
         ticket.setAttendee(attendee);
         return ticketRepository.save(ticket);
+    }
+
+    /**
+     * Creates and persists a BlockedRegistration record.
+     *
+     * @param event the event the attendee is blocked from
+     * @param attendee the blocked attendee
+     * @param blockedBy the event host who authored the block
+     * @return the persisted BlockedRegistration entity
+     */
+    private BlockedRegistration createBlockedRegistration(Event event, Attendee attendee, EventHost blockedBy)
+    {
+        BlockedRegistration block = new BlockedRegistration.Builder()
+            .attendee(attendee)
+            .event(event)
+            .blockedBy(blockedBy)
+            .build();
+
+        return blockedRegistrationRepository.save(block);
     }
 
     /**
@@ -348,6 +378,77 @@ class TicketControllerTest
                     .content(requestBody))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Responded to invitation with response: REJECTED"));
+        }
+
+        @Test
+        @DisplayName("Responding to an invitation when blocked from the event returns 403 and leaves the invitation pending")
+        void respondingWhenBlockedFromEventReturns403() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PRIVATE);
+            Attendee attendee = createAttendee();
+            Ticket ticket = createTicket(event, attendee);
+            createBlockedRegistration(event, attendee, host);
+
+            String requestBody = buildRespondToInvitationRequestBody
+            (
+                ticket.getPublicToken(),
+                "ACCEPTED",
+                null
+            );
+
+            mockMvc.perform(patch(BASE_PATH)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.message").value(
+                    "Cannot respond to an invitation when you are already blocked from the event."));
+
+            // A rejected response must not change the invitation status
+            // or notify the event host.
+            assertThat(ticketRepository.findById(ticket.getId()).orElseThrow().getInvitationStatus())
+                .isEqualTo(InvitationStatus.PENDING);
+            verifyNoInteractions(emailService);
+        }
+
+        @Test
+        @DisplayName("Responding to an invitation succeeds when blocked from a different event")
+        void respondingWhenBlockedFromDifferentEventReturns200() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event blockedEvent = createEvent(host, EventType.PRIVATE);
+            Event event = createEvent(host, EventType.PRIVATE);
+            Attendee attendee = createAttendee();
+            Ticket ticket = createTicket(event, attendee);
+
+            // The attendee is blocked from a different event, not the one being responded to.
+            createBlockedRegistration(blockedEvent, attendee, host);
+
+            String requestBody = buildRespondToInvitationRequestBody
+            (
+                ticket.getPublicToken(),
+                "ACCEPTED",
+                null
+            );
+
+            mockMvc.perform(patch(BASE_PATH)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Responded to invitation with response: ACCEPTED"));
+
+            assertThat(ticketRepository.findById(ticket.getId()).orElseThrow().getInvitationStatus())
+                .isEqualTo(InvitationStatus.ACCEPTED);
+
+            verify(emailService).sendInvitationResponseEmail
+            (
+                eq(TEST_EMAIL),
+                anyString(),
+                anyString(),
+                eq("accepted"),
+                anyString()
+            );
         }
 
         @Test

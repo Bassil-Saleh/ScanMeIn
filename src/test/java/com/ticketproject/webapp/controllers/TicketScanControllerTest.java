@@ -2,6 +2,7 @@ package com.ticketproject.webapp.controllers;
 
 import com.ticketproject.webapp.constants.ApiPaths;
 import com.ticketproject.webapp.model.entities.Attendee;
+import com.ticketproject.webapp.model.entities.BlockedRegistration;
 import com.ticketproject.webapp.model.entities.Event;
 import com.ticketproject.webapp.model.entities.EventAddress;
 import com.ticketproject.webapp.model.entities.EventHost;
@@ -11,6 +12,7 @@ import com.ticketproject.webapp.model.enums.EventStatus;
 import com.ticketproject.webapp.model.enums.EventType;
 import com.ticketproject.webapp.model.enums.RegistrationStatus;
 import com.ticketproject.webapp.model.repositories.AttendeeRepository;
+import com.ticketproject.webapp.model.repositories.BlockedRegistrationRepository;
 import com.ticketproject.webapp.model.repositories.EventHostRepository;
 import com.ticketproject.webapp.model.repositories.EventRepository;
 import com.ticketproject.webapp.model.repositories.TicketRepository;
@@ -36,6 +38,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -69,6 +72,9 @@ class TicketScanControllerTest
     private AttendeeRepository attendeeRepository;
 
     @Autowired
+    private BlockedRegistrationRepository blockedRegistrationRepository;
+
+    @Autowired
     private TicketService ticketService;
 
     @MockitoBean
@@ -87,6 +93,9 @@ class TicketScanControllerTest
     @BeforeEach
     void setUp()
     {
+        // Blocked registrations reference attendees, events, and event hosts,
+        // so they must be removed before those referenced entities.
+        blockedRegistrationRepository.deleteAll();
         ticketRepository.deleteAll();
         eventRepository.deleteAll();
         eventHostRepository.deleteAll();
@@ -177,6 +186,25 @@ class TicketScanControllerTest
     }
 
     /**
+     * Creates and persists a BlockedRegistration record.
+     *
+     * @param event the event the attendee is blocked from
+     * @param attendee the blocked attendee
+     * @param blockedBy the event host who authored the block
+     * @return the persisted BlockedRegistration entity
+     */
+    private BlockedRegistration createBlockedRegistration(Event event, Attendee attendee, EventHost blockedBy)
+    {
+        BlockedRegistration block = new BlockedRegistration.Builder()
+            .attendee(attendee)
+            .event(event)
+            .blockedBy(blockedBy)
+            .build();
+
+        return blockedRegistrationRepository.save(block);
+    }
+
+    /**
      * Creates and persists a Ticket for the given event.
      *
      * @param event the event the ticket belongs to
@@ -254,6 +282,64 @@ class TicketScanControllerTest
             Event event = createEvent(host, EventType.PUBLIC);
             Attendee attendee = createAttendee();
             Ticket ticket = createTicket(event, attendee);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            String requestBody = """
+                {
+                    "publicToken": "%s"
+                }
+                """.formatted(ticket.getPublicToken());
+
+            mockMvc.perform(post(BASE_PATH)
+                    .header("Authorization", "Bearer " + jwt)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.message").value("Your ticket has been scanned."));
+        }
+
+        @Test
+        @DisplayName("Scanning the ticket of an attendee blocked from the event returns 403")
+        void scanningBlockedAttendeeTicketReturns403() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event event = createEvent(host, EventType.PUBLIC);
+            Attendee attendee = createAttendee();
+            Ticket ticket = createTicket(event, attendee);
+            createBlockedRegistration(event, attendee, host);
+            String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
+
+            String requestBody = """
+                {
+                    "publicToken": "%s"
+                }
+                """.formatted(ticket.getPublicToken());
+
+            mockMvc.perform(post(BASE_PATH)
+                    .header("Authorization", "Bearer " + jwt)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(requestBody))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.message").value(
+                    "Cannot scan ticket because the attendee has been blocked from this event."));
+
+            // A rejected scan must not mark the ticket as present.
+            assertThat(ticketRepository.findById(ticket.getId()).orElseThrow().isPresent()).isFalse();
+        }
+
+        @Test
+        @DisplayName("Scanning a ticket when the attendee is blocked from a different event returns 201")
+        void scanningTicketWhenAttendeeBlockedFromDifferentEventReturns201() throws Exception
+        {
+            EventHost host = createVerifiedEventHost(TEST_EMAIL, TEST_PASSWORD);
+            Event blockedEvent = createEvent(host, EventType.PUBLIC);
+            Event event = createEvent(host, EventType.PUBLIC);
+            Attendee attendee = createAttendee();
+            Ticket ticket = createTicket(event, attendee);
+
+            // The attendee is blocked from a different event, not the one being scanned.
+            createBlockedRegistration(blockedEvent, attendee, host);
             String jwt = loginAndGetJwt(TEST_EMAIL, TEST_PASSWORD);
 
             String requestBody = """
