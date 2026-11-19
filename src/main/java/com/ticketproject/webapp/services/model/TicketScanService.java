@@ -95,6 +95,8 @@ public class TicketScanService
         Optional<BlockedRegistration> existingBlock =
             blockedRegistrationRepository.findByEventIdAndEmailBlindIndex(foundEvent.getId(), emailBlindIndex);
 
+        // If the attendee is blocked from the event, then they
+        // shouldn't be able to use their ticket to attend the event.
         if (existingBlock.isPresent())
         {
             throw new AttendeeBlockedException
