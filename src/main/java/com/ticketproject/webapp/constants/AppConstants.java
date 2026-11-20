@@ -1113,6 +1113,8 @@ public final class AppConstants
             public static final String EVENT_TYPE_CHANGED_EMAIL = "%s - Event Type Changed";
             public static final String EVENT_REGISTRATION_BLOCKED_EMAIL = "%s - Registration Blocked";
             public static final String EVENT_REGISTRATION_UNBLOCKED_EMAIL = "%s - Registration Unblocked";
+            public static final String EVENT_REGISTRATION_DELETED_EMAIL = "%s - Registration Deleted";
+            public static final String EVENT_INVITATION_DELETED_EMAIL = "%s - Invitation Deleted";
         }
 
         public static final class Templates
@@ -1142,6 +1144,8 @@ public final class AppConstants
             public static final String EVENT_REGISTRATION_BLOCKED_WITH_REASON_EMAIL = "email/event-registration-blocked-with-reason-email";
             public static final String EVENT_REGISTRATION_BLOCKED_NO_REASON_EMAIL = "email/event-registration-blocked-no-reason-email";
             public static final String EVENT_REGISTRATION_UNBLOCKED_EMAIL = "email/event-registration-unblocked-email";
+            public static final String EVENT_REGISTRATION_DELETED_EMAIL = "email/registration-deleted-by-event-host";
+            public static final String EVENT_INVITATION_DELETED_EMAIL = "email/invitation-deleted-by-event-host";
         }
     }
 

@@ -71,7 +71,14 @@ public interface TicketRepository extends JpaRepository<Ticket, Long>
      * @param eventId the ID of an event
      * @return a list of Ticket entities which are not marked as deleted
      */
-    @Query("SELECT t FROM Ticket t WHERE t.event.id = :eventId AND t.deletedAt IS NULL AND t.attendee.emailBlindIndex IN :emailBlindIndexes")
+    @Query
+    (
+        "SELECT t FROM Ticket t " +
+        "JOIN FETCH t.attendee " +
+        "WHERE t.event.id = :eventId " +
+        "AND t.deletedAt IS NULL " +
+        "AND t.attendee.emailBlindIndex IN :emailBlindIndexes"
+    )
     List<Ticket> findAllActiveTicketsByEmailBlindIndex
     (
         @Param("emailBlindIndexes")

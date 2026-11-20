@@ -830,6 +830,59 @@ public class EmailService
     }
 
     /**
+     * Sends an email to an attendee notifying them that their
+     * registration or invitation to an event has been deleted.
+     * @param attendeeEmail the attendee's email address
+     * @param eventName the event name
+     * @param eventHostName the event host's name
+     * @param eventType the event type
+     */
+    public void sendEventTicketDeletedEmail
+    (
+        String attendeeEmail,
+        String eventName,
+        String eventHostName,
+        EventType eventType
+    )
+    {
+        requireAllowedRecipient(attendeeEmail);
+
+        try
+        {
+            // Prepare the Thymeleaf context with template variables.
+            Map<String, Object> variables = new HashMap<>();
+            variables.put("eventName", eventName);
+            variables.put("eventHostName", eventHostName);
+
+            if (eventType == EventType.PUBLIC)
+            {
+                sendHtmlEmail
+                (
+                    new ArrayList<>(List.of(attendeeEmail)),
+                    AppConstants.Email.Subjects.EVENT_REGISTRATION_DELETED_EMAIL.formatted(eventName),
+                    AppConstants.Email.Templates.EVENT_REGISTRATION_DELETED_EMAIL,
+                    variables
+                );
+            }
+            else
+            {
+                sendHtmlEmail
+                (
+                    new ArrayList<>(List.of(attendeeEmail)),
+                    AppConstants.Email.Subjects.EVENT_INVITATION_DELETED_EMAIL.formatted(eventName),
+                    AppConstants.Email.Templates.EVENT_INVITATION_DELETED_EMAIL,
+                    variables
+                );
+            }
+        }
+        catch (MailException | MessagingException | IOException e)
+        {
+            throw new EmailSendFailedException
+            ("Registration unblock email could not be sent. Please try again later.");
+        }
+    }
+
+    /**
      * Renders a Thymeleaf email template and sends the rendered
      * HTML email to every recipient in the given list.
      *

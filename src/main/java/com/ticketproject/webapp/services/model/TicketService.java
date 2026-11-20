@@ -453,6 +453,20 @@ public class TicketService
 
         // TODO: Send an email to each person notifying them
         // that their ticket for the event was deleted.
+        for (Ticket aTicket : foundTickets)
+        {
+            emailService.sendEventTicketDeletedEmail
+            (
+                aTicket.getAttendee().getEmail(),
+                foundEvent.getName(),
+                eventHost.getFirstName() +
+                    (eventHost.getMiddleName() != null
+                     ? eventHost.getMiddleName() + " "
+                     : " ")
+                     + eventHost.getLastName(),
+                foundEvent.getEventType()
+            );
+        }
 
         return new SingleMessageResponse
         ("Deleted " + foundTicketIds.size() + " ticket" + (foundTicketIds.size() > 1 ? "s" : "") + ".");
